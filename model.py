@@ -11,6 +11,8 @@ from keras.callbacks import TensorBoard
 import numpy as np
 import os
 
+SIZE = conf['SIZE']
+
 
 def residual_block(input_, node_name):
     with tf.name_scope(node_name):
@@ -40,7 +42,7 @@ def loss(y_true, y_pred):
 
 def build_model():
     with tf.name_scope('input'):
-        _input = Input(shape=(19, 19, 17))
+        _input = Input(shape=(SIZE, SIZE, 17))
         conv1 = Conv2D(filters=256, kernel_size=(3, 3), strides=1,
                 data_format='channels_last')(_input)
         batch1 = BatchNormalization()(conv1)
@@ -61,7 +63,7 @@ def build_model():
         policy_relu = Activation('relu')(policy_batch)
         policy_shape = (reduce(lambda x, y: x * y, policy_relu._keras_shape[1:]), )
         policy_reshape = Reshape(target_shape=policy_shape)(policy_relu)
-        policy_out = Dense(362, activation='softmax', name="policy_out")(policy_reshape)
+        policy_out = Dense(SIZE*SIZE + 1, activation='softmax', name="policy_out")(policy_reshape)
 
     with tf.name_scope('value'):
         value_conv = Conv2D(filters=2, kernel_size=(1, 1), strides=1)(tower_output)
@@ -88,6 +90,6 @@ def create_initial_model(name):
     tf_callback.on_epoch_end(0)
     tf_callback.on_train_end(0)
     # batch_size = 10
-    # X = np.random.rand( batch_size, 19, 19, 17)
+    # X = np.random.rand( batch_size, SIZE, SIZE, 17)
     # print model.predict(X)
     model.save(full_filename)

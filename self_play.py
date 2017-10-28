@@ -8,20 +8,29 @@ import numpy.ma as ma
 from numpy.ma.core import MaskedConstant
 import datetime
 from math import sqrt
+import h5py
 
 SWAP_INDEX = [1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14]
+SIZE = conf['SIZE']
 Cpuct = 1
 
 def index2coord(index):
-    y = index / 19
-    x = index - 19 * y
+    y = index / SIZE
+    x = index - SIZE * y
     return x, y
 
 def legal_moves(board):
+    # Occupied places
     mask1 = board[0,:,:,0].reshape(-1) != 0
     mask2 = board[0,:,:,1].reshape(-1) != 0
-    # TODO Deal with ko later
     mask = mask1 + mask2
+
+    # Ko situations
+    ko_mask = (board[0,:,:,2] - board[0,:,:,0])
+    if (ko_mask == 1).sum() == 1:
+        mask += (ko_mask == 1).reshape(-1)
+
+    # Pass is always legal
     mask = np.append(mask, 0)
     return mask
 
@@ -93,7 +102,6 @@ def mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model
         selected_a = np.random.choice(moves, size=1, p=ps)[0]
     elif temperature == 0:
         _, selected_a = max((dic['count'], a) for a, dic in mcts_tree.items())
-    mask = legal_moves(board)
     return selected_a
 
 def select_play(policy, board, mcts_simulations, mcts_tree, temperature, model):
@@ -125,16 +133,62 @@ def show_board(board):
                 print u".",
         print ""
 
-def take_stones(board):
-    # TODO implement later
+dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+def capture_group(x, y, real_board, group=None):
+    if group is None:
+        group = [(x, y)]
+
+    c = real_board[y][x]
+    for dx, dy in dxdys:
+        nx = x + dx
+        ny = y + dy
+        if (nx, ny) in group:
+            continue
+        if not(0 <= nx < SIZE and 0 <= ny < SIZE):
+            continue
+        dc = real_board[ny][nx]
+        if dc == 0:
+            return None
+        elif dc == c:
+            group.append( (nx, ny) )
+            group = capture_group(nx, ny, real_board, group=group)
+            if group == None:
+                return None
+    return group
+
+def take_stones(x, y, board):
+    real_board = get_real_board(board)
+    for dx, dy in dxdys:
+        nx = x + dx
+        ny = y + dy
+        if not(0 <= nx < SIZE and 0 <= ny < SIZE):
+            continue
+        if real_board[ny][nx] == 0:
+            continue
+        group = capture_group(nx, ny, real_board)
+        if group:
+            for _x, _y in group:
+                if board[0,_y,_x,1] == 0:
+                    # Sucide
+                    assert board[0,_y,_x,0] == 1
+                    board[0,_y,_x,0] = 0
+                    real_board[_y][_x] = 0
+                else:
+                    assert board[0,_y,_x,1] == 1
+                    board[0,_y,_x,1] = 0
+                    real_board[_y][_x] = 0
+
+
+
+
     return board
 
 def make_play(x, y, board):
     player = board[0,0,0,-1]
     board[:,:,:,2:16] = board[:,:,:,0:14]
-    if y != 19:
+    if y != SIZE:
         board[0,y,x,0] = 1  # Careful here about indices
-        board = take_stones(board)
+        board = take_stones(x, y, board)
     else:
         # "Skipping", player
         pass
@@ -195,15 +249,17 @@ def _get_points(real_board):
     return points
 
 def self_play_game(model, mcts_simulations):
-    board = np.zeros((1, 19, 19, 17), dtype=np.float32)
+    board = np.zeros((1, SIZE, SIZE, 17), dtype=np.float32)
+    boards = []
     player = 1
     board[:,:,:,-1] = player
     start = datetime.datetime.now()
     skipped_last = False
     temperature = 1
     mcts_tree = None
-    for i in range(22):
-        if i == 30:
+    start = datetime.datetime.now()
+    for i in range(722):
+        if i == conf['STOP_EXPLORATION']:
             temperature = 0
         policy, value = model.predict(board)
         if mcts_tree is None:
@@ -211,26 +267,52 @@ def self_play_game(model, mcts_simulations):
         index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, model)
         x, y = index2coord(index)
         mcts_tree = mcts_tree[index]['subtree']
-        if skipped_last and y == 19:
+        if skipped_last and y == SIZE:
             break
-        skipped_last = y == 19
-        # print "Before play"
-        # show_board(board)
+        skipped_last = y == SIZE
+
+        policy_target = np.zeros(SIZE*SIZE + 1)
+        for index, d in mcts_tree.items():
+            policy_target[index] = d['p']
+        boards.append( (board, policy_target) )
         board, player = make_play(x, y, board)
-        print "Player ", player, "(", x, y, ")"
-        # print "Move ", i + 1, datetime.datetime.now() - start
-        print len(mcts_tree)
-        show_board(board)
     show_board(board)
 
     winner, black_points, white_points = get_winner(board)
     player_string = {1: "B", 0: "D", -1: "W"}
     winner_string = "%s+%s" % (player_string[winner], abs(black_points - white_points))
     print "Game played (%s) : %s" % (winner_string, datetime.datetime.now() - start)
-    return winner
+    winner_result = {1: 1, -1: 0, 0: None}
+    return boards, winner_result[winner]
 
 
 def self_play(model_name, n_games, mcts_simulations):
     model = load_model(os.path.join(conf['MODEL_DIR'], model_name), custom_objects={'loss': loss})
-    for i in range(n_games):
-        self_play_game(model, mcts_simulations)
+    for game in range(n_games):
+        boards, winner = self_play_game(model, mcts_simulations)
+        if winner is None:
+            continue
+        for move, (board, policy_target) in enumerate(boards):
+            value_target = 1 if winner == board[0,0,0,-1] else 0
+            save_file(model, game, move, board, policy_target, value_target)
+
+def save_file(model, game, move, board, policy_target, value_target):
+    directory = os.path.join("games", model.name, "game_%03d" % game, "move_%03d" % move)
+    try:
+        os.makedirs(directory)
+    except OSError:
+        while True:
+            game += 1
+            directory = os.path.join("games", model.name, "game_%03d" % game, "move_%03d" % move)
+            try:
+                os.makedirs(directory)
+                break
+            except OSError:
+                pass
+
+    with h5py.File(os.path.join(directory, 'sample.h5'),'w') as f:
+        f.create_dataset('board',data=board,dtype=np.float32)
+        f.create_dataset('policy_target',data=policy_target,dtype=np.float32)
+        f.create_dataset('value_target',data=np.array(value_target),dtype=np.float32)
+
+
