@@ -266,7 +266,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
     temperature = 1
     mcts_tree = None
     start = datetime.datetime.now()
-    for i in range(722):
+    for i in range(SIZE * SIZE):
         if i == stop_exploration:
             temperature = 0
         policy, value = current_model.predict(board)
@@ -286,10 +286,15 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
 
         board, player = make_play(x, y, board)
         current_model, other_model = other_model, current_model
-        show_board(board)
-        print("")
 
-    show_board(board)
+        if conf['SHOW_EACH_MOVES']:
+            show_board(board)
+            print("")
+            print(datetime.datetime.now() - start)
+
+
+    if conf['SHOW_END_GAME']:
+        show_board(board)
 
     winner, black_points, white_points = get_winner(board)
     player_string = {1: "B", 0: "D", -1: "W"}

@@ -18,13 +18,18 @@ def init_directories():
         pass
 
 def main():
+
     init_directories()
     model_name = "model_1.h5"
     create_initial_model(name=model_name)
-    self_play(model_name=model_name, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
+
+    print("Created random model")
+    # self_play(model_name=model_name, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
+    print("Played %s games with model %s" % (conf['N_GAMES'], model_name))
 
     model = load_latest_model()
     train(model)
+    print("Trained model")
 
     best_model = load_model(os.path.join(conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
     evaluate(best_model, model)

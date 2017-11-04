@@ -84,30 +84,34 @@ def create_initial_model(name):
     full_filename = os.path.join(conf['MODEL_DIR'], name)
     if os.path.isfile(full_filename):
         return
+
     model = build_model()
+
+    # Save graph in tensorboard. This graph has the name scopes making it look
+    # good in tensorboard, the loaded models will not have the scopes.
     tf_callback = TensorBoard(log_dir=os.path.join(conf['LOG_DIR'], name),
             histogram_freq=0, batch_size=1, write_graph=True, write_grads=False)
     tf_callback.set_model(model)
     tf_callback.on_epoch_end(0)
     tf_callback.on_train_end(0)
-    # batch_size = 10
-    # X = np.random.rand( batch_size, SIZE, SIZE, 17)
-    # print model.predict(X)
+
     model.save(full_filename)
     best_filename = os.path.join(conf['MODEL_DIR'], 'best_model.h5')
     model.save(best_filename)
 
-def load_latest_model(self):
+def load_latest_model():
     index = -1
     model_filename = None
-    for filename in os.path.listdir(conf['MODEL_dir']):
+    for filename in os.listdir(conf['MODEL_DIR']):
         try:
-            i = int(filename.split('_')[-1])
+            name = filename.split('.')[0] # remove .h5
+            i = int(name.split('_')[-1])
             if i > index:
                 model_filename = filename
                 index = i
         except:
             continue
     model = load_model(os.path.join(conf['MODEL_DIR'], model_filename), custom_objects={'loss': loss})
+    print("Loaded latest model", model_filename)
     return model
 

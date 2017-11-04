@@ -16,7 +16,7 @@ def train(model):
     base_name, index = name.split('_')
     new_name = "_".join([base_name, str(int(index) + 1)]) + ".h5"
     tf_callback = TensorBoard(log_dir=os.path.join(conf['LOG_DIR'], new_name),
-            histogram_freq=1, batch_size=BATCH_SIZE, write_graph=False, write_grads=False)
+            histogram_freq=conf['HISTOGRAM_FREQ'], batch_size=BATCH_SIZE, write_graph=False, write_grads=False)
 
     directory = os.path.join("games", model.name)
     all_files = []
