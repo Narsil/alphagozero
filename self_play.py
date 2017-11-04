@@ -9,13 +9,14 @@ from numpy.ma.core import MaskedConstant
 import datetime
 from math import sqrt
 import h5py
+from random import random
 
 SWAP_INDEX = [1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14]
 SIZE = conf['SIZE']
 Cpuct = 1
 
 def index2coord(index):
-    y = index / SIZE
+    y = index // SIZE
     x = index - SIZE * y
     return x, y
 
@@ -126,12 +127,12 @@ def show_board(board):
     for row in real_board:
         for c in row:
             if c == 1:
-                print u"○",
+                print(u"○", end=' ')
             elif c == -1:
-                print u"●",
+                print(u"●", end=' ')
             else:
-                print u".",
-        print ""
+                print(u".", end=' ')
+        print("")
 
 dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 def capture_group(x, y, real_board, group=None):
@@ -158,7 +159,7 @@ def capture_group(x, y, real_board, group=None):
 
 def take_stones(x, y, board):
     real_board = get_real_board(board)
-    for dx, dy in dxdys:
+    for dx, dy in dxdys + [(0, 0)]:  # We need to check this is not self sucide on one stone.
         nx = x + dx
         ny = y + dy
         if not(0 <= nx < SIZE and 0 <= ny < SIZE):
@@ -248,23 +249,30 @@ def _get_points(real_board):
     points = dict(zip(unique, counts))
     return points
 
-def self_play_game(model, mcts_simulations):
+def play_game(model1, model2, mcts_simulations, stop_exploration):
     board = np.zeros((1, SIZE, SIZE, 17), dtype=np.float32)
     boards = []
     player = 1
     board[:,:,:,-1] = player
+    if random() < .5:
+        current_model, other_model = model1, model2
+        model1_isblack = True
+    else:
+        other_model, current_model = model1, model2
+        model1_isblack = False
+
     start = datetime.datetime.now()
     skipped_last = False
     temperature = 1
     mcts_tree = None
     start = datetime.datetime.now()
     for i in range(722):
-        if i == conf['STOP_EXPLORATION']:
+        if i == stop_exploration:
             temperature = 0
-        policy, value = model.predict(board)
+        policy, value = current_model.predict(board)
         if mcts_tree is None:
             mcts_tree = new_leaf(policy)
-        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, model)
+        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
         x, y = index2coord(index)
         mcts_tree = mcts_tree[index]['subtree']
         if skipped_last and y == SIZE:
@@ -275,21 +283,27 @@ def self_play_game(model, mcts_simulations):
         for index, d in mcts_tree.items():
             policy_target[index] = d['p']
         boards.append( (board, policy_target) )
+
         board, player = make_play(x, y, board)
+        current_model, other_model = other_model, current_model
+        show_board(board)
+        print("")
+
     show_board(board)
 
     winner, black_points, white_points = get_winner(board)
     player_string = {1: "B", 0: "D", -1: "W"}
     winner_string = "%s+%s" % (player_string[winner], abs(black_points - white_points))
-    print "Game played (%s) : %s" % (winner_string, datetime.datetime.now() - start)
+    print("Game played (%s) : %s" % (winner_string, datetime.datetime.now() - start))
     winner_result = {1: 1, -1: 0, 0: None}
-    return boards, winner_result[winner]
+    winner_model = model1 if (winner == 1) == model1_isblack else model2
+    return boards, winner_result[winner], winner_model
 
 
 def self_play(model_name, n_games, mcts_simulations):
     model = load_model(os.path.join(conf['MODEL_DIR'], model_name), custom_objects={'loss': loss})
     for game in range(n_games):
-        boards, winner = self_play_game(model, mcts_simulations)
+        boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'])
         if winner is None:
             continue
         for move, (board, policy_target) in enumerate(boards):
