@@ -38,7 +38,7 @@ def loss(y_true, y_pred):
     return mse + categorical_crossentropy
 
 
-def build_model():
+def build_model(name):
     with tf.name_scope('input'):
         _input = Input(shape=(SIZE, SIZE, 17))
         conv1 = Conv2D(filters=256, kernel_size=(3, 3), strides=1,
@@ -75,17 +75,18 @@ def build_model():
         value_hidden = Dense(256, activation='relu', **REGULARIZERS)(value_reshape)
         value_out = Dense(1, activation='tanh', name="value_out", **REGULARIZERS)(value_hidden)
 
-    model = Model(inputs=[_input], outputs=[policy_out, value_out])
+    model = Model(inputs=[_input], outputs=[policy_out, value_out], name=name)
     sgd = SGD(lr=1e-2, momentum = 0.9)
     model.compile(sgd, loss=loss)
     return model
 
 def create_initial_model(name):
-    full_filename = os.path.join(conf['MODEL_DIR'], name)
+    full_filename = os.path.join(conf['MODEL_DIR'], name) + ".h5"
     if os.path.isfile(full_filename):
-        return
+        model = load_model(full_filename, custom_objects={'loss': loss})
+        return model
 
-    model = build_model()
+    model = build_model(name)
 
     # Save graph in tensorboard. This graph has the name scopes making it look
     # good in tensorboard, the loaded models will not have the scopes.
@@ -98,6 +99,7 @@ def create_initial_model(name):
     model.save(full_filename)
     best_filename = os.path.join(conf['MODEL_DIR'], 'best_model.h5')
     model.save(best_filename)
+    return model
 
 def load_latest_model():
     index = -1

@@ -10,15 +10,16 @@ SIZE = conf['SIZE']
 BATCH_SIZE = conf['TRAIN_BATCH_SIZE']
 EPOCHS_PER_SAVE = conf['EPOCHS_PER_SAVE']
 NUM_WORKERS = conf['NUM_WORKERS']
+VALIDATION_SPLIT = conf['VALIDATION_SPLIT']
 
-def train(model):
+def train(model, game_model_name):
     name = model.name
     base_name, index = name.split('_')
     new_name = "_".join([base_name, str(int(index) + 1)]) + ".h5"
     tf_callback = TensorBoard(log_dir=os.path.join(conf['LOG_DIR'], new_name),
             histogram_freq=conf['HISTOGRAM_FREQ'], batch_size=BATCH_SIZE, write_graph=False, write_grads=False)
 
-    directory = os.path.join("games", model.name)
+    directory = os.path.join("games", game_model_name)
     all_files = []
     for root, dirs, files in os.walk(directory):
         for f in files:
@@ -45,9 +46,10 @@ def train(model):
             model.fit(X, [value_y, policy_y],
                 initial_epoch=fake_epoch,
                 epochs=fake_epoch + 1,
-                validation_split=0.1, # Needed for TensorBoard histograms and gradi
+                validation_split=VALIDATION_SPLIT, # Needed for TensorBoard histograms and gradi
                 callbacks=[tf_callback],
                 verbose=0,
             )
+    model.name = new_name.split('.')[0]
     model.save(os.path.join(conf['MODEL_DIR'], new_name))
 

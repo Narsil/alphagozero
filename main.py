@@ -20,19 +20,20 @@ def init_directories():
 def main():
 
     init_directories()
-    model_name = "model_1.h5"
-    create_initial_model(name=model_name)
-
+    model_name = "model_1"
+    model = create_initial_model(name=model_name)
     print("Created random model")
-    # self_play(model_name=model_name, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
+    self_play(model, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
     print("Played %s games with model %s" % (conf['N_GAMES'], model_name))
 
-    model = load_latest_model()
-    train(model)
-    print("Trained model")
-
-    best_model = load_model(os.path.join(conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
-    evaluate(best_model, model)
+    while True:
+        model = load_latest_model()
+        best_model = load_model(os.path.join(conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
+        train(model, game_model_name=best_model.name)
+        print("Trained model")
+        new_is_best = evaluate(best_model, model)
+        if new_is_best:
+            self_play(model, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
 
 if __name__ == "__main__":
     main()

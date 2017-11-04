@@ -35,8 +35,14 @@ def legal_moves(board):
     mask = np.append(mask, 0)
     return mask
 
-def new_leaf(policy):
+def new_leaf(policy, board):
     leaf = {}
+
+    # We need to check for legal moves here because MCTS might not have expanded
+    # this subtree
+    mask = legal_moves(board)
+    policy = ma.masked_array(policy, mask=mask)
+
     for move, p in enumerate(policy.reshape(-1)):
         if isinstance(p, MaskedConstant):
             continue
@@ -76,7 +82,7 @@ def simulate(node, board, model):
         policy, value = model.predict(board)
         mask = legal_moves(board)
         policy = ma.masked_array(policy, mask=mask)
-        leaf = new_leaf(policy)
+        leaf = new_leaf(policy, board)
         selected_node['subtree'] = leaf
 
     selected_node['count'] += 1
@@ -249,33 +255,50 @@ def _get_points(real_board):
     points = dict(zip(unique, counts))
     return points
 
-def play_game(model1, model2, mcts_simulations, stop_exploration):
+
+def game_init():
     board = np.zeros((1, SIZE, SIZE, 17), dtype=np.float32)
-    boards = []
     player = 1
     board[:,:,:,-1] = player
+    return board, player
+
+def choose_first_player(model1, model2):
     if random() < .5:
         current_model, other_model = model1, model2
+        mcts_tree, other_mcts = None, None
         model1_isblack = True
     else:
         other_model, current_model = model1, model2
         model1_isblack = False
+        mcts_tree, other_mcts = None, None
+    return current_model, other_model, mcts_tree, other_mcts
+
+def play_game(model1, model2, mcts_simulations, stop_exploration):
+    board, player = game_init()
+    boards = []
+
+    current_model, other_model, mcts_tree, other_mcts = choose_first_player(model1, model2)
+    model1_isblack = current_model == model1
 
     start = datetime.datetime.now()
     skipped_last = False
     temperature = 1
-    mcts_tree = None
     start = datetime.datetime.now()
-    for i in range(SIZE * SIZE):
+    end_reason = "PLAYED ALL MOVES"
+    for i in range(SIZE * SIZE * 2):
         if i == stop_exploration:
             temperature = 0
         policy, value = current_model.predict(board)
-        if mcts_tree is None:
-            mcts_tree = new_leaf(policy)
+        # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
+        if not mcts_tree:
+            mcts_tree = new_leaf(policy, board)
+
         index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
         x, y = index2coord(index)
-        mcts_tree = mcts_tree[index]['subtree']
+
+
         if skipped_last and y == SIZE:
+            end_reason = "BOTH_PASSED"
             break
         skipped_last = y == SIZE
 
@@ -284,29 +307,51 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
             policy_target[index] = d['p']
         boards.append( (board, policy_target) )
 
+        # Update trees
+        mcts_tree = mcts_tree[index]['subtree']
+        try:
+            other_mcts = other_mcts[index]['subtree']
+        except:
+            other_mcts = None
+
+        # Swap players
         board, player = make_play(x, y, board)
         current_model, other_model = other_model, current_model
+        mcts_tree, other_mcts = other_mcts, mcts_tree
 
         if conf['SHOW_EACH_MOVES']:
+            # Inverted here because we already swapped players
+            color = "W" if player == 1 else "B"
+
+            print("%s(%s,%s)" % (color, x, y)) 
+            print("")
             show_board(board)
             print("")
-            print(datetime.datetime.now() - start)
 
-
-    if conf['SHOW_END_GAME']:
-        show_board(board)
 
     winner, black_points, white_points = get_winner(board)
     player_string = {1: "B", 0: "D", -1: "W"}
     winner_string = "%s+%s" % (player_string[winner], abs(black_points - white_points))
-    print("Game played (%s) : %s" % (winner_string, datetime.datetime.now() - start))
     winner_result = {1: 1, -1: 0, 0: None}
-    winner_model = model1 if (winner == 1) == model1_isblack else model2
+
+    if winner == 0:
+        winner_model = None
+    else:
+        winner_model = model1 if (winner == 1) == model1_isblack else model2
+
+    if conf['SHOW_END_GAME']:
+        if model1_isblack:
+            modelB, modelW = model1, model2
+        else:
+            modelW, modelB = model1, model2
+
+        print("B:%s, W:%s" %(modelB.name, modelW.name))
+        show_board(board)
+        print("Game played (%s: %s) : %s" % (winner_string, end_reason, datetime.datetime.now() - start))
     return boards, winner_result[winner], winner_model
 
 
-def self_play(model_name, n_games, mcts_simulations):
-    model = load_model(os.path.join(conf['MODEL_DIR'], model_name), custom_objects={'loss': loss})
+def self_play(model, n_games, mcts_simulations):
     for game in range(n_games):
         boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'])
         if winner is None:
@@ -333,5 +378,3 @@ def save_file(model, game, move, board, policy_target, value_target):
         f.create_dataset('board',data=board,dtype=np.float32)
         f.create_dataset('policy_target',data=policy_target,dtype=np.float32)
         f.create_dataset('value_target',data=np.array(value_target),dtype=np.float32)
-
-

@@ -20,6 +20,8 @@ So far everything runs in one big loop. It might and up being split in the futur
 Everythin is set in the `conf.py` file. All original papers parameters are described in the comments, but for a single machine, single GPU machine,
 you should definitely stick to much lower parameters.
 
+**Whenever you change configuration you should use reset.sh. But be careful, it will ERASE ALL PREVIOUS DATA (models and self play, and tensorboard logs)**
+
 
 
 ### Model
