@@ -95,9 +95,11 @@ def create_initial_model(name):
     tf_callback.set_model(model)
     tf_callback.on_epoch_end(0)
     tf_callback.on_train_end(0)
-
-    model.save(full_filename)
     best_filename = os.path.join(conf['MODEL_DIR'], 'best_model.h5')
+
+    from self_play import self_play
+    self_play(model, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
+    model.save(full_filename)
     model.save(best_filename)
     return model
 

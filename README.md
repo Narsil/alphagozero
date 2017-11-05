@@ -2,6 +2,7 @@
 
 This is a unofficial reimplementation in Keras (Tensorflow backend) of [AlphaGo Zero]
 It is work in progress. The aim is to have simple code.
+Written in Python 3.
 
 # Installation and run
 
@@ -49,6 +50,12 @@ The evaluator just runs games to check which model is best and saves the new mod
 # Development
 
 Want to contribute? Pull Requests more than welcome. 
+
+TODOS:
+ - Improve the tests (Right now basic gameplay functions are tested)
+ - Add symetries to the board (used in MCTS search)
+ - Batch the predict policy in MCTS simulations
+ - Find ways to distribute the work.
 
 
 [//]: # (These are reference links used in the body of this note and get stripped out when the markdown processor does its job. There is no need to format nicely because it shouldn't be seen. Thanks SO - http://stackoverflow.com/questions/4823468/store-comments-in-markdown-syntax)

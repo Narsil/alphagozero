@@ -10,6 +10,7 @@ import datetime
 from math import sqrt
 import h5py
 from random import random
+import tqdm
 
 SWAP_INDEX = [1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14]
 SIZE = conf['SIZE']
@@ -35,7 +36,7 @@ def legal_moves(board):
     mask = np.append(mask, 0)
     return mask
 
-def new_leaf(policy, board):
+def new_leaf(policy, board, add_noise=False):
     leaf = {}
 
     # We need to check for legal moves here because MCTS might not have expanded
@@ -43,9 +44,19 @@ def new_leaf(policy, board):
     mask = legal_moves(board)
     policy = ma.masked_array(policy, mask=mask)
 
-    for move, p in enumerate(policy.reshape(-1)):
+    # Add Dirichlet noise.
+    tmp = policy.reshape(-1)
+    if add_noise:
+        alpha = conf['DIRICHLET_ALPHA']
+        noise = np.random.dirichlet([alpha for i in range(tmp.shape[0])])
+        epsilon = conf['DIRICHLET_EPSILON']
+        tmp = (1 - epsilon) * tmp + epsilon * noise
+
+
+    for move, p in enumerate(tmp):
         if isinstance(p, MaskedConstant):
             continue
+
         leaf[move] = {
             'count': 0,
             'value': 0,
@@ -239,7 +250,7 @@ def get_winner(board):
     real_board = get_real_board(board)
     points =  _get_points(real_board)
     black = points.get(1, 0) + points.get(2, 0)
-    white = points.get(-1, 0) + points.get(-2, 0)
+    white = points.get(-1, 0) + points.get(-2, 0) + conf['KOMI']
     if black > white:
         return 1, black, white
     elif black == white:
@@ -265,19 +276,20 @@ def game_init():
 def choose_first_player(model1, model2):
     if random() < .5:
         current_model, other_model = model1, model2
-        mcts_tree, other_mcts = None, None
-        model1_isblack = True
     else:
         other_model, current_model = model1, model2
-        model1_isblack = False
-        mcts_tree, other_mcts = None, None
-    return current_model, other_model, mcts_tree, other_mcts
+    return current_model, other_model
 
-def play_game(model1, model2, mcts_simulations, stop_exploration):
+def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False):
     board, player = game_init()
     boards = []
 
-    current_model, other_model, mcts_tree, other_mcts = choose_first_player(model1, model2)
+    current_model, other_model = choose_first_player(model1, model2)
+    mcts_tree, other_mcts = {}, {}
+
+    if self_play:
+        other_mcts = mcts_tree  # Fuse the trees
+
     model1_isblack = current_model == model1
 
     start = datetime.datetime.now()
@@ -291,7 +303,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
         policy, value = current_model.predict(board)
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
         if not mcts_tree:
-            mcts_tree = new_leaf(policy, board)
+            mcts_tree = new_leaf(policy, board, add_noise=self_play)
 
         index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
         x, y = index2coord(index)
@@ -305,21 +317,23 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
         policy_target = np.zeros(SIZE*SIZE + 1)
         for index, d in mcts_tree.items():
             policy_target[index] = d['p']
-        boards.append( (board, policy_target) )
+        boards.append( (np.copy(board), policy_target) )
 
         # Update trees
+        if not self_play:
+            # Update other only if we are not in self_play
+            if other_mcts != mcts_tree and index in other_mcts:
+                other_mcts = other_mcts[index]['subtree']
+            else:
+                other_mcts = {}
         mcts_tree = mcts_tree[index]['subtree']
-        try:
-            other_mcts = other_mcts[index]['subtree']
-        except:
-            other_mcts = None
 
         # Swap players
         board, player = make_play(x, y, board)
         current_model, other_model = other_model, current_model
         mcts_tree, other_mcts = other_mcts, mcts_tree
 
-        if conf['SHOW_EACH_MOVES']:
+        if conf['SHOW_EACH_MOVE']:
             # Inverted here because we already swapped players
             color = "W" if player == 1 else "B"
 
@@ -352,8 +366,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration):
 
 
 def self_play(model, n_games, mcts_simulations):
-    for game in range(n_games):
-        boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'])
+    for game in tqdm.tqdm(range(n_games), desc="Self play %s" % model.name):
+        boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True)
         if winner is None:
             continue
         for move, (board, policy_target) in enumerate(boards):
