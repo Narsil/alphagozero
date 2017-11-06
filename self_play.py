@@ -176,25 +176,38 @@ def capture_group(x, y, real_board, group=None):
 
 def take_stones(x, y, board):
     real_board = get_real_board(board)
-    for dx, dy in dxdys + [(0, 0)]:  # We need to check this is not self sucide on one stone.
+    _player = 1 if board[0,0,0,-1] == 1 else -1
+    for dx, dy in dxdys:  # We need to check capture
         nx = x + dx
         ny = y + dy
         if not(0 <= nx < SIZE and 0 <= ny < SIZE):
             continue
         if real_board[ny][nx] == 0:
             continue
+        if real_board[ny][nx] == _player:
+            continue
         group = capture_group(nx, ny, real_board)
         if group:
             for _x, _y in group:
-                if board[0,_y,_x,1] == 0:
-                    # Sucide
-                    assert board[0,_y,_x,0] == 1
-                    board[0,_y,_x,0] = 0
-                    real_board[_y][_x] = 0
-                else:
-                    assert board[0,_y,_x,1] == 1
-                    board[0,_y,_x,1] = 0
-                    real_board[_y][_x] = 0
+                assert board[0,_y,_x,1] == 1
+                board[0,_y,_x,1] = 0
+                real_board[_y][_x] = 0
+    for dx, dy in dxdys + [(0, 0)]:  # We need to check self sucide.
+        nx = x + dx
+        ny = y + dy
+        if not(0 <= nx < SIZE and 0 <= ny < SIZE):
+            continue
+        if real_board[ny][nx] == 0:
+            continue
+        if real_board[ny][nx] != _player:
+            continue
+        group = capture_group(nx, ny, real_board)
+        if group:
+            for _x, _y in group:
+                # Sucide
+                assert board[0,_y,_x,0] == 1
+                board[0,_y,_x,0] = 0
+                real_board[_y][_x] = 0
 
 
 
@@ -297,7 +310,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
     temperature = 1
     start = datetime.datetime.now()
     end_reason = "PLAYED ALL MOVES"
-    for i in range(SIZE * SIZE * 2):
+    for i in tqdm.tqdm(range(SIZE * SIZE * 2), total=SIZE  * SIZE * 2, desc="Games moves"):
         if i == stop_exploration:
             temperature = 0
         policy, value = current_model.predict(board)
