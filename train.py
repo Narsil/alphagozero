@@ -1,7 +1,7 @@
 import os
 import h5py
 import numpy as np
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, TerminateOnNaN
 from random import sample
 from conf import conf
 import tqdm
@@ -18,6 +18,7 @@ def train(model, game_model_name):
     new_name = "_".join([base_name, str(int(index) + 1)]) + ".h5"
     tf_callback = TensorBoard(log_dir=os.path.join(conf['LOG_DIR'], new_name),
             histogram_freq=conf['HISTOGRAM_FREQ'], batch_size=BATCH_SIZE, write_graph=False, write_grads=False)
+    nan_callback = TerminateOnNaN()
 
     directory = os.path.join("games", game_model_name)
     all_files = []
@@ -47,7 +48,7 @@ def train(model, game_model_name):
                 initial_epoch=fake_epoch,
                 epochs=fake_epoch + 1,
                 validation_split=VALIDATION_SPLIT, # Needed for TensorBoard histograms and gradi
-                callbacks=[tf_callback],
+                callbacks=[tf_callback, nan_callback],
                 verbose=0,
             )
     model.name = new_name.split('.')[0]

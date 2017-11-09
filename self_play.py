@@ -11,6 +11,7 @@ from math import sqrt
 import h5py
 from random import random
 import tqdm
+from symmetry import random_symmetry_predict
 
 SWAP_INDEX = [1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14]
 SIZE = conf['SIZE']
@@ -90,7 +91,7 @@ def simulate(node, board, model):
     else:
         # This is a leaf
         N = len(node)
-        policy, value = model.predict(board)
+        policy, value = random_symmetry_predict(model, board)
         mask = legal_moves(board)
         policy = ma.masked_array(policy, mask=mask)
         leaf = new_leaf(policy, board)
@@ -302,6 +303,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
 
     if self_play:
         other_mcts = mcts_tree  # Fuse the trees
+    last_value = None
+    value = None
 
     model1_isblack = current_model == model1
 
@@ -310,7 +313,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
     temperature = 1
     start = datetime.datetime.now()
     end_reason = "PLAYED ALL MOVES"
-    for i in tqdm.tqdm(range(SIZE * SIZE * 2), total=SIZE  * SIZE * 2, desc="Games moves"):
+    for i in range(SIZE * SIZE * 2):
+        last_value = value
         if i == stop_exploration:
             temperature = 0
         policy, value = current_model.predict(board)
@@ -372,7 +376,15 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         else:
             modelW, modelB = model1, model2
 
+        if player == 0:
+            # black played last
+            bvalue, wvalue = value, last_value
+        else:
+            bvalue, wvalue = last_value, value
+
+        print("")
         print("B:%s, W:%s" %(modelB.name, modelW.name))
+        print("Bvalue:%s, Wvalue:%s" %(bvalue, wvalue))
         show_board(board)
         print("Game played (%s: %s) : %s" % (winner_string, end_reason, datetime.datetime.now() - start))
     return boards, winner_result[winner], winner_model
@@ -384,7 +396,7 @@ def self_play(model, n_games, mcts_simulations):
         if winner is None:
             continue
         for move, (board, policy_target) in enumerate(boards):
-            value_target = 1 if winner == board[0,0,0,-1] else 0
+            value_target = 1 if winner == board[0,0,0,-2] else -1
             save_file(model, game, move, board, policy_target, value_target)
 
 def save_file(model, game, move, board, policy_target, value_target):

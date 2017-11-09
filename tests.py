@@ -1,11 +1,24 @@
 # -*- coding: utf-8 -*-
+from conf import conf
+conf['SIZE'] = 9  # Override settings for tests
+
 import unittest
 import numpy as np
-from conf import conf
 from self_play import (
         color_board, _get_points, capture_group, make_play, legal_moves,
         index2coord,
 )
+from symmetry import (
+        _id,
+        left_diagonal, reverse_left_diagonal,
+        right_diagonal, reverse_right_diagonal,
+        vertical_axis, reverse_vertical_axis,
+        horizontal_axis, reverse_horizontal_axis,
+        rotation_90, reverse_rotation_90,
+        rotation_180, reverse_rotation_180,
+        rotation_270, reverse_rotation_270,
+)
+import itertools
 
 class TestGoMethods(unittest.TestCase):
     def assertEqualList(self, arr1, arr2):
@@ -351,6 +364,208 @@ class TestBoardMethods(unittest.TestCase):
             else:
                 self.assertEqual(board[0][y][x][0], 0) # white
                 self.assertEqual(board[0][y][x][1], 1) # white
+
+class TestSymmetrydTestCase(unittest.TestCase):
+
+    def setUp(self):
+        size = conf['SIZE']
+        board = np.zeros((1, size, size, 17), dtype=np.float32)
+        player = 1
+        board[:,:,:,-1] = player
+        policy = np.zeros((size * size + 1), dtype=np.float32)
+        self.board = board
+        self.size = size
+        self.policy = policy
+        board = self.board
+
+
+        for x, y in [(1, 1), (1, 2), (1, 3), (2, 3)]:
+            make_play(x, y, board) # black
+            make_play(0, size, board) # white pass
+            policy[x + y * size] = 1
+
+        policy[size * size] = -1  # Pass move
+
+    def test_id(self):
+        board = self.board
+        size = self.size
+
+        old_board = np.copy(board)
+        board = _id(board)
+        
+        for i, j in zip(old_board.reshape(-1), board.reshape(-1)):
+            self.assertEqual(i, j)
+
+        policy = np.arange(size*size + 1)
+        old_policy = np.copy(policy)
+        policy = _id(policy)
+
+        for i, j in zip(old_policy.reshape(-1), policy.reshape(-1)):
+            self.assertEqual(i, j)
+
+    def test_left_diagonal(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(1, 1), (2, 1), (3, 1), (3, 2)] # Transposed
+
+        board = left_diagonal(board)
+
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_left_diagonal(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+    def test_vertical_axis(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(7, 1), (7, 2), (7, 3), (6, 3)] # vertical_axis
+
+        board = vertical_axis(board)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_vertical_axis(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+    def test_right_diagonal(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(7, 7), (6, 7), (5, 7), (5, 6)] #  right diagonal
+
+        board = right_diagonal(board)
+
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_right_diagonal(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+
+    def test_horizontal_axis(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(1, 7), (1, 6), (1, 5), (2, 5)] # horizontal_axis
+
+        board = horizontal_axis(board)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_horizontal_axis(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+    def test_rotation_90(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(1, 7), (2, 7), (3, 7), (3, 6)] # Rotation 90deg anticlockwise
+
+        board = rotation_90(board)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_rotation_90(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+    def test_rotation_180(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(7, 7), (7, 6), (7, 5), (6, 5)] # Rotation 180deg anticlockwise
+
+        board = rotation_180(board)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_rotation_180(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
+
+    def test_rotation_270(self):
+        board = self.board
+        size = self.size
+        should_be_ones = [(7, 1), (6, 1), (5, 1), (5, 2)] # Rotation 270deg anticlockwise
+
+        board = rotation_270(board)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(board[0,y,x,0], 1)
+                self.assertEqual(board[0,y,x,1], 0)
+            else:
+                self.assertEqual(board[0,y,x,0], 0)
+                self.assertEqual(board[0,y,x,1], 0)
+
+        policy = self.policy
+        policy = reverse_rotation_270(policy)
+        for x, y in itertools.product(range(size), repeat=2):
+            if (x, y) in should_be_ones:
+                self.assertEqual(policy[x + size * y], 1)
+            else:
+                self.assertEqual(policy[x + size * y], 0)
+        self.assertEqual(policy[size * size], -1)
 
 
 
