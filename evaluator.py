@@ -2,6 +2,7 @@ from self_play import play_game, self_play
 from conf import conf
 import os
 from tqdm import tqdm
+import datetime
 
 MCTS_SIMULATIONS = conf['MCTS_SIMULATIONS']
 EVALUATE_N_GAMES = conf['EVALUATE_N_GAMES']
@@ -18,11 +19,13 @@ def evaluate(best_model, tested_model):
     desc = "Evaluation %s vs %s" % (tested_model.name, best_model.name)
     tq = tqdm(range(EVALUATE_N_GAMES), desc=desc)
     for i in tq:
-        _, _, winner_model = play_game(best_model, tested_model, MCTS_SIMULATIONS, stop_exploration=0)
+        start = datetime.datetime.now()
+        boards, _, winner_model = play_game(best_model, tested_model, MCTS_SIMULATIONS, stop_exploration=0)
+        stop = datetime.datetime.now()
         if winner_model == tested_model:
             wins += 1
         total += 1
-        new_desc = desc + " (winrate:%s%%)" % int(wins/total*100)
+        new_desc = desc + " (winrate:%s%% %.2fs/move)" % (int(wins/total*100), (stop - start).seconds / len(boards))
         tq.set_description(new_desc)
 
     if wins/total > EVALUATE_MARGIN:

@@ -391,12 +391,19 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
 
 
 def self_play(model, n_games, mcts_simulations):
-    for game in tqdm.tqdm(range(n_games), desc="Self play %s" % model.name):
+    desc = "Self play %s" % model.name
+    games = tqdm.tqdm(range(n_games), desc=desc)
+    for game in games:
+        start = datetime.datetime.now()
         boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True)
+        stop = datetime.datetime.now()
+        moves = len(boards)
+        games.set_description(desc + " %.2fs/move" % ( (stop - start).seconds / moves))
         if winner is None:
             continue
         for move, (board, policy_target) in enumerate(boards):
-            value_target = 1 if winner == board[0,0,0,-2] else -1
+            other_player = board[0,0,0,-1] # Current player was changed after having played
+            value_target = -1 if winner == other_player else 1
             save_file(model, game, move, board, policy_target, value_target)
 
 def save_file(model, game, move, board, policy_target, value_target):
