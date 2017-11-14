@@ -49,7 +49,7 @@ def left_diagonal(board):
 
 LEFT_DIAGONAL_SWAP = axis_symmetry_indexes(pi/4.)
 def reverse_left_diagonal(policy):
-    policy[:] = policy[LEFT_DIAGONAL_SWAP]
+    policy[:,:] = policy[:,LEFT_DIAGONAL_SWAP]
     return policy
 
 ########## VERTICAL AXIS
@@ -59,7 +59,7 @@ def vertical_axis(board):
 
 VERTICAL_AXIS_SWAP = axis_symmetry_indexes(pi/2.)
 def reverse_vertical_axis(policy):
-    policy[:] = policy[VERTICAL_AXIS_SWAP]
+    policy[:,:] = policy[:,VERTICAL_AXIS_SWAP]
     return policy
 
 ########## RIGHT DIAGONAL
@@ -68,7 +68,7 @@ def right_diagonal(board):
 
 RIGHT_DIAGONAL_SWAP = axis_symmetry_indexes(3*pi/4.)
 def reverse_right_diagonal(policy):
-    policy[:] = policy[RIGHT_DIAGONAL_SWAP]
+    policy[:,:] = policy[:,RIGHT_DIAGONAL_SWAP]
     return policy
 
 
@@ -84,7 +84,7 @@ for x, y in itertools.product(range(SIZE), repeat=2):
     HORIZONTAL_AXIS_SWAP[index] = transpose_index
 HORIZONTAL_AXIS_SWAP[SIZE * SIZE] = SIZE * SIZE
 def reverse_horizontal_axis(policy):
-    policy[:] = policy[HORIZONTAL_AXIS_SWAP]
+    policy[:,:] = policy[:,HORIZONTAL_AXIS_SWAP]
     return policy
 
 ########### ROTATION 90
@@ -93,7 +93,7 @@ def rotation_90(board):
 
 ROTATION_90_SWAP = rotation_indexes(pi/2.)
 def reverse_rotation_90(policy):
-    policy[:] = policy[ROTATION_90_SWAP]
+    policy[:,:] = policy[:,ROTATION_90_SWAP]
     return policy
 
 ########### ROTATION 180
@@ -102,7 +102,7 @@ def rotation_180(board):
 
 ROTATION_180_SWAP = rotation_indexes(pi)
 def reverse_rotation_180(policy):
-    policy[:] = policy[ROTATION_180_SWAP]
+    policy[:,:] = policy[:,ROTATION_180_SWAP]
     return policy
 
 ########### ROTATION 270
@@ -111,7 +111,7 @@ def rotation_270(board):
 
 ROTATION_270_SWAP = rotation_indexes(3*pi/2)
 def reverse_rotation_270(policy):
-    policy[:] = policy[ROTATION_270_SWAP]
+    policy[:,:] = policy[:,ROTATION_270_SWAP]
     return policy
 
 
@@ -128,6 +128,6 @@ SYMMETRIES = [
 def random_symmetry_predict(model, board):
     symmetry, reverse_symmetry = choice(SYMMETRIES)
     symm_board = symmetry(board)
-    symm_policy, value = model.predict(symm_board)
-    policy = reverse_symmetry(symm_policy.reshape(-1))
+    symm_policy, value = model.predict_on_batch(symm_board)
+    policy = reverse_symmetry(symm_policy)
     return policy, value

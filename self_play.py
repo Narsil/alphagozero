@@ -15,6 +15,9 @@ from symmetry import random_symmetry_predict
 
 SWAP_INDEX = [1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14]
 SIZE = conf['SIZE']
+MCTS_BATCH_SIZE = conf['MCTS_BATCH_SIZE']
+DIRICHLET_ALPHA = conf['DIRICHLET_ALPHA']
+DIRICHLET_EPSILON = conf['DIRICHLET_EPSILON']
 Cpuct = 1
 
 def index2coord(index):
@@ -37,7 +40,20 @@ def legal_moves(board):
     mask = np.append(mask, 0)
     return mask
 
-def new_leaf(policy, board, add_noise=False):
+def new_tree(policy, board, add_noise=False):
+    mcts_tree = {
+        'count': 0,
+        'value': 0,
+        'mean_value': 0,
+        'p': 1,
+        'subtree':{},
+        'parent': None,
+    }
+    subtree = new_subtree(policy, board, parent=mcts_tree, add_noise=self_play)
+    mcts_tree['subtree'] = subtree
+    return mcts_tree
+
+def new_subtree(policy, board, parent, add_noise=False):
     leaf = {}
 
     # We need to check for legal moves here because MCTS might not have expanded
@@ -48,10 +64,8 @@ def new_leaf(policy, board, add_noise=False):
     # Add Dirichlet noise.
     tmp = policy.reshape(-1)
     if add_noise:
-        alpha = conf['DIRICHLET_ALPHA']
-        noise = np.random.dirichlet([alpha for i in range(tmp.shape[0])])
-        epsilon = conf['DIRICHLET_EPSILON']
-        tmp = (1 - epsilon) * tmp + epsilon * noise
+        noise = np.random.dirichlet([DIRICHLET_ALPHA for i in range(tmp.shape[0])])
+        tmp = (1 - DIRICHLET_EPSILON) * tmp + DIRICHLET_EPSILON * noise
 
 
     for move, p in enumerate(tmp):
@@ -63,55 +77,100 @@ def new_leaf(policy, board, add_noise=False):
             'value': 0,
             'mean_value': 0,
             'p': p,
-            'subtree':{}
+            'subtree':{},
+            'parent': parent,
         }
     return leaf
 
-def simulate(node, board, model):
-    total_n = sqrt(sum(dic['count'] for dic in node.values()))
+def top_n_actions(subtree, top_n):
+    total_n = sqrt(sum(dic['count'] for dic in subtree.values()))
     if total_n == 0:
         total_n = 1
     # Select exploration
-    max_a = -1
-    max_v = -1
-    for a, dic in node.items():
+    max_actions = []
+    for a, dic in subtree.items():
         u = Cpuct * dic['p'] * total_n / (1. + dic['count']) 
         v = dic['mean_value'] + u
-        if v > max_v:
-            max_v = v
-            max_a = a
+
+        if len(max_actions) < top_n or v > max_actions[0]['value']:
+            max_actions.append({'action': a, 'value': v, 'node': dic})
+            max_actions.sort(key=lambda x: x['value'], reverse=True)
+        if len(max_actions) > top_n:
+            max_actions = max_actions[:-1]
+    return max_actions
+
+def simulate(node, board, model, mcts_batch_size):
+    node_subtree = node['subtree']
+    max_actions = top_n_actions(node_subtree, mcts_batch_size)
+    max_a = max_actions[0]['action']
 
     selected_action = max_a
-    selected_node = node[selected_action]
-    x, y = index2coord(selected_action)
-    player = board[0,0,0,-1]
-    board, player = make_play(x, y, board)
-    if selected_node['subtree'] != {}:
-        value = simulate(selected_node['subtree'], board, model)
-    else:
+    selected_node = node_subtree[selected_action]
+    if selected_node['subtree'] == {}:
         # This is a leaf
-        N = len(node)
-        policy, value = random_symmetry_predict(model, board)
-        mask = legal_moves(board)
-        policy = ma.masked_array(policy, mask=mask)
-        leaf = new_leaf(policy, board)
-        selected_node['subtree'] = leaf
+        boards = np.zeros((mcts_batch_size, SIZE, SIZE, 17), dtype=np.float32)
+        for i, dic in enumerate(max_actions):
+            action = dic['action']
+            if dic['node']['subtree'] != {}:
+                # already expanded
+                tmp_node = dic['node']
+                tmp_action = action
+                tmp_board = np.copy(board)
+                x, y = index2coord(tmp_action)
+                tmp_board, _ = make_play(x, y, tmp_board)
+                while tmp_node['subtree'] != {}:
+                    tmp_max_actions = top_n_actions(tmp_node['subtree'], mcts_batch_size)
+                    tmp_d = tmp_max_actions[0]
+                    tmp_node = tmp_d['node']
+                    tmp_action = tmp_d['action']
+                    # The node for this action is the leaf, this is where the
+                    # update will start, working up the tree
+                    dic['node'] = tmp_node 
+                    x, y = index2coord(tmp_action)
+                    tmp_board, _ = make_play(x, y, tmp_board)
+                boards[i] = tmp_board
+            else:
+                tmp_board = np.copy(board)
+                x, y = index2coord(action)
+                player = tmp_board[0,0,0,-1]
+                tmp_board, player = make_play(x, y, tmp_board)
+                boards[i] = tmp_board
 
-    selected_node['count'] += 1
-    selected_node['value'] += value
-    selected_node['mean_value'] = selected_node['value'] / float(selected_node['count'])
-    return value
+        policies, values = random_symmetry_predict(model, boards)
+        for policy, value, board, action in zip(policies, values, boards, max_actions):
+            shape = board.shape
+            board = board.reshape([1] + list(shape))
+            mask = legal_moves(board)
+            policy = ma.masked_array(policy, mask=mask)
+            subtree = new_subtree(policy, board, node)
+            leaf_node = action['node']
+            leaf_node['subtree'] = subtree
+
+            current_node = leaf_node
+            while True:
+                current_node['count'] += 1
+                current_node['value'] += value[0]
+                current_node['mean_value'] = current_node['value'] / float(current_node['count'])
+                if current_node['parent']:
+                    current_node = current_node['parent']
+                else:
+                    break
+    else:
+        x, y = index2coord(selected_action)
+        player = board[0,0,0,-1]
+        board, player = make_play(x, y, board)
+        simulate(selected_node, board, model, mcts_batch_size)
 
 def mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model):
-    for i in range(mcts_simulations):
+    for i in range(int(mcts_simulations/MCTS_BATCH_SIZE)):
         test_board = np.copy(board)
-        simulate(mcts_tree, test_board, model)
+        simulate(mcts_tree, test_board, model, MCTS_BATCH_SIZE)
 
     if temperature == 1:
-        total_n = sum(dic['count'] for dic in mcts_tree.values())
+        total_n = sum(dic['count'] for dic in mcts_tree['subtree'].values())
         moves = []
         ps = []
-        for move, dic in mcts_tree.items():
+        for move, dic in mcts_tree['subtree'].items():
             n = dic['count']
             if not n:
                 continue
@@ -120,7 +179,7 @@ def mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model
             ps.append(p)
         selected_a = np.random.choice(moves, size=1, p=ps)[0]
     elif temperature == 0:
-        _, selected_a = max((dic['count'], a) for a, dic in mcts_tree.items())
+        _, selected_a = max((dic['count'], a) for a, dic in mcts_tree['subtree'].items())
     return selected_a
 
 def select_play(policy, board, mcts_simulations, mcts_tree, temperature, model):
@@ -294,12 +353,12 @@ def choose_first_player(model1, model2):
         other_model, current_model = model1, model2
     return current_model, other_model
 
-def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False):
+def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False, num_moves=None):
     board, player = game_init()
-    boards = []
+    boards_and_policies = []
 
     current_model, other_model = choose_first_player(model1, model2)
-    mcts_tree, other_mcts = {}, {}
+    mcts_tree, other_mcts = None, None
 
     if self_play:
         other_mcts = mcts_tree  # Fuse the trees
@@ -313,37 +372,41 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
     temperature = 1
     start = datetime.datetime.now()
     end_reason = "PLAYED ALL MOVES"
-    for i in range(SIZE * SIZE * 2):
+    if num_moves is None:
+        num_moves = SIZE * SIZE * 2
+    for i in range(num_moves):
         last_value = value
         if i == stop_exploration:
             temperature = 0
         policy, value = current_model.predict(board)
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
-        if not mcts_tree:
-            mcts_tree = new_leaf(policy, board, add_noise=self_play)
+        if not mcts_tree or not mcts_tree['subtree']:
+            mcts_tree = new_tree(policy, board, add_noise=self_play)
+
 
         index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
         x, y = index2coord(index)
 
+        policy_target = np.zeros(SIZE*SIZE + 1)
+        for index, d in mcts_tree['subtree'].items():
+            policy_target[index] = d['p']
+
+        boards_and_policies.append( (np.copy(board), policy_target) )
 
         if skipped_last and y == SIZE:
             end_reason = "BOTH_PASSED"
             break
         skipped_last = y == SIZE
 
-        policy_target = np.zeros(SIZE*SIZE + 1)
-        for index, d in mcts_tree.items():
-            policy_target[index] = d['p']
-        boards.append( (np.copy(board), policy_target) )
 
         # Update trees
         if not self_play:
             # Update other only if we are not in self_play
-            if other_mcts != mcts_tree and index in other_mcts:
-                other_mcts = other_mcts[index]['subtree']
-            else:
-                other_mcts = {}
-        mcts_tree = mcts_tree[index]['subtree']
+            if other_mcts and index in other_mcts['subtree']:
+                other_mcts = other_mcts['subtree'][index]
+                other_mcts['parent'] = None # Cut the tree
+        mcts_tree = mcts_tree['subtree'][index]
+        mcts_tree['parent'] = None # Cut the tree
 
         # Swap players
         board, player = make_play(x, y, board)
@@ -358,6 +421,20 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             print("")
             show_board(board)
             print("")
+    else:
+        # When finishing due to ending the game, add the last configuration
+        # to the data
+        policy, value = current_model.predict(board)
+        if not mcts_tree or not mcts_tree['subtree']:
+            mcts_tree = new_tree(policy, board, add_noise=self_play)
+        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
+        x, y = index2coord(index)
+
+        policy_target = np.zeros(SIZE*SIZE + 1)
+        for index, d in mcts_tree['subtree'].items():
+            policy_target[index] = d['p']
+        boards_and_policies.append( (np.copy(board), policy_target) )
+
 
 
     winner, black_points, white_points = get_winner(board)
@@ -387,7 +464,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         print("Bvalue:%s, Wvalue:%s" %(bvalue, wvalue))
         show_board(board)
         print("Game played (%s: %s) : %s" % (winner_string, end_reason, datetime.datetime.now() - start))
-    return boards, winner_result[winner], winner_model
+    return boards_and_policies, winner_result[winner], winner_model
 
 
 def self_play(model, n_games, mcts_simulations):
@@ -395,15 +472,15 @@ def self_play(model, n_games, mcts_simulations):
     games = tqdm.tqdm(range(n_games), desc=desc)
     for game in games:
         start = datetime.datetime.now()
-        boards, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True)
+        boards_and_policies, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True)
         stop = datetime.datetime.now()
-        moves = len(boards)
+        moves = len(boards_and_policies)
         games.set_description(desc + " %.2fs/move" % ( (stop - start).seconds / moves))
         if winner is None:
             continue
-        for move, (board, policy_target) in enumerate(boards):
-            other_player = board[0,0,0,-1] # Current player was changed after having played
-            value_target = -1 if winner == other_player else 1
+        for move, (board, policy_target) in enumerate(boards_and_policies):
+            player = board[0,0,0,-1]
+            value_target = 1 if winner == player else -1
             save_file(model, game, move, board, policy_target, value_target)
 
 def save_file(model, game, move, board, policy_target, value_target):
@@ -421,6 +498,6 @@ def save_file(model, game, move, board, policy_target, value_target):
                 pass
 
     with h5py.File(os.path.join(directory, 'sample.h5'),'w') as f:
-        f.create_dataset('board',data=board,dtype=np.float32)
-        f.create_dataset('policy_target',data=policy_target,dtype=np.float32)
-        f.create_dataset('value_target',data=np.array(value_target),dtype=np.float32)
+        f.create_dataset('board', data=board, dtype=np.float32)
+        f.create_dataset('policy_target', data=policy_target, dtype=np.float32)
+        f.create_dataset('value_target', data=np.array(value_target), dtype=np.float32)

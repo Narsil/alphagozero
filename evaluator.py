@@ -1,4 +1,4 @@
-from self_play import play_game, self_play
+from self_play import play_game, self_play, save_file
 from conf import conf
 import os
 from tqdm import tqdm
@@ -18,15 +18,21 @@ def evaluate(best_model, tested_model):
     wins = 0
     desc = "Evaluation %s vs %s" % (tested_model.name, best_model.name)
     tq = tqdm(range(EVALUATE_N_GAMES), desc=desc)
-    for i in tq:
+    for game in tq:
         start = datetime.datetime.now()
-        boards, _, winner_model = play_game(best_model, tested_model, MCTS_SIMULATIONS, stop_exploration=0)
+        boards_and_policies, winner, winner_model = play_game(best_model, tested_model, MCTS_SIMULATIONS, stop_exploration=0)
         stop = datetime.datetime.now()
         if winner_model == tested_model:
             wins += 1
         total += 1
-        new_desc = desc + " (winrate:%s%% %.2fs/move)" % (int(wins/total*100), (stop - start).seconds / len(boards))
+        new_desc = desc + " (winrate:%s%% %.2fs/move)" % (int(wins/total*100), (stop - start).seconds / len(boards_and_policies))
         tq.set_description(new_desc)
+
+        for move, (board, policy_target) in enumerate(boards_and_policies):
+            player = board[0,0,0,-1]
+            value_target = 1 if winner == player else -1
+            save_file(best_model, game, move, board, policy_target, value_target)
+
 
     if wins/total > EVALUATE_MARGIN:
         print("We found a new best model : %s!" % tested_model.name)

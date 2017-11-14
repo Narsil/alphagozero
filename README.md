@@ -54,7 +54,6 @@ Want to contribute? Pull Requests more than welcome.
 TODOS:
  - Improve the tests (Right now basic gameplay functions are tested)
  - Add resignation value (10% of the games go all the way, to make sure the dynamic threshold for which there is a false positive of 5% at most)
- - Batch the predict policy in MCTS simulations
  - Find ways to distribute the work.
 
 

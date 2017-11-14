@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from conf import conf
 conf['SIZE'] = 9  # Override settings for tests
+conf['KOMI'] = 5.5  # Override settings for tests
 
 import unittest
 import numpy as np
 from self_play import (
         color_board, _get_points, capture_group, make_play, legal_moves,
-        index2coord,
+        index2coord, simulate, play_game,
 )
 from symmetry import (
         _id,
@@ -372,7 +373,7 @@ class TestSymmetrydTestCase(unittest.TestCase):
         board = np.zeros((1, size, size, 17), dtype=np.float32)
         player = 1
         board[:,:,:,-1] = player
-        policy = np.zeros((size * size + 1), dtype=np.float32)
+        policy = np.zeros((1, size * size + 1), dtype=np.float32)
         self.board = board
         self.size = size
         self.policy = policy
@@ -382,9 +383,9 @@ class TestSymmetrydTestCase(unittest.TestCase):
         for x, y in [(1, 1), (1, 2), (1, 3), (2, 3)]:
             make_play(x, y, board) # black
             make_play(0, size, board) # white pass
-            policy[x + y * size] = 1
+            policy[0, x + y * size] = 1
 
-        policy[size * size] = -1  # Pass move
+        policy[0, size * size] = -1  # Pass move
 
     def test_id(self):
         board = self.board
@@ -422,10 +423,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_left_diagonal(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
     def test_vertical_axis(self):
         board = self.board
@@ -445,10 +446,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_vertical_axis(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
     def test_right_diagonal(self):
         board = self.board
@@ -469,10 +470,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_right_diagonal(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
 
     def test_horizontal_axis(self):
@@ -493,10 +494,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_horizontal_axis(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
     def test_rotation_90(self):
         board = self.board
@@ -516,10 +517,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_rotation_90(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
     def test_rotation_180(self):
         board = self.board
@@ -539,10 +540,10 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_rotation_180(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
 
     def test_rotation_270(self):
         board = self.board
@@ -562,10 +563,430 @@ class TestSymmetrydTestCase(unittest.TestCase):
         policy = reverse_rotation_270(policy)
         for x, y in itertools.product(range(size), repeat=2):
             if (x, y) in should_be_ones:
-                self.assertEqual(policy[x + size * y], 1)
+                self.assertEqual(policy[0, x + size * y], 1)
             else:
-                self.assertEqual(policy[x + size * y], 0)
-        self.assertEqual(policy[size * size], -1)
+                self.assertEqual(policy[0, x + size * y], 0)
+        self.assertEqual(policy[0, size * size], -1)
+
+
+class DummyModel(object):
+    name = "dummy_model"
+    def predict(self, X):
+        policies, values = self.predict_on_batch(X)
+        return policies[0], values[0]
+
+    def predict_on_batch(self, X):
+        size = conf['SIZE']
+        batch_size = X.shape[0]
+        policy = np.zeros((batch_size, size * size + 1), dtype=np.float32)
+        for i in range(batch_size):
+            policy[i,:] = 1./(size*size +1)
+
+        value = np.zeros((batch_size, 1), dtype=np.float32)
+        value[:] = 1
+        return policy, value
+
+class MCTSTestCase(unittest.TestCase):
+    def setUp(self):
+        # Remove the symmetries for reproductibility
+        import symmetry
+        symmetry.SYMMETRIES = symmetry.SYMMETRIES[0:1]
+        size = conf['SIZE']
+        tree = {
+            'count': 0,
+            'mean_value': 0,
+            'value': 0,
+            'parent': None,
+            'subtree': {
+                0:{
+                    'count': 0,
+                    'p': 1,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {}
+                }, 
+                1: {
+                    'count': 0,
+                    'p': 0,
+                    'mean_value': 0,
+                    'value': 0,
+                    'subtree': {}
+                }
+            }
+        }
+        tree['subtree'][0]['parent'] = tree
+        tree['subtree'][1]['parent'] = tree
+        
+        board = np.zeros((1, size, size, 17), dtype=np.float32)
+        player = 1
+        board[:,:,:,-1] = player
+
+        model = DummyModel()
+
+        self.model = model
+        self.board = board
+        self.tree = tree
+
+    def test_leaf(self):
+        tree = self.tree
+        board = self.board 
+        model = self.model
+
+        simulate(tree, board, model, mcts_batch_size=2)
+        self.assertEqual(tree['subtree'][0]['count'], 1)
+        self.assertEqual(tree['subtree'][1]['count'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], 1)
+        self.assertEqual(tree['subtree'][1]['value'], 1)
+        self.assertEqual(tree['count'], 2)
+        self.assertEqual(tree['value'], 2)
+
+
+    def test_model_evaluation(self):
+        tree = self.tree
+        board = self.board 
+        size = conf['SIZE']
+
+        test_board1 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board1[:,:,:,-1] = 1
+        make_play(0, 0, test_board1)
+
+        test_board2 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board2[:,:,:,-1] = 1
+        make_play(1, 0, test_board2)
+
+        class DummyModel(object):
+            def predict_on_batch(_, X):
+                size = conf['SIZE']
+                board1 = X[0].reshape(1, size, size, 17)
+                board2 = X[1].reshape(1, size, size, 17)
+                self.assertTrue(np.array_equal(board1, test_board1))
+                self.assertTrue(np.array_equal(board2, test_board2))
+                batch_size = X.shape[0]
+                policy = np.zeros((batch_size, size * size + 1), dtype=np.float32)
+                policy[:,0] = 1
+
+                value = np.zeros((batch_size, 1), dtype=np.float32)
+                value[:] = 1
+                return policy, value
+        model = DummyModel()
+
+        simulate(tree, board, model, mcts_batch_size=2)
+
+    def test_model_evaluation_nested(self):
+        tree = {
+            'count': 0,
+            'mean_value': 0,
+            'value': 0,
+            'parent': None,
+            'subtree':{
+                0:{
+                    'count': 0,
+                    'p': 1,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {
+                        1: {       # <----- This will be checked first
+                            'count': 0,
+                            'p': 1,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        },
+                        2: {       # <----- This will be checked second
+                            'count': 0,
+                            'p': 0,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        }
+                    }
+                }, 
+                1: {
+                    'count': 0,
+                    'p': 0,
+                    'mean_value': 0,
+                    'value': 0,
+                    'subtree': {},
+                }
+            }
+        }
+        tree['subtree'][0]['parent'] = tree
+        tree['subtree'][0]['subtree'][1]['parent'] = tree['subtree'][0]
+        tree['subtree'][0]['subtree'][2]['parent'] = tree['subtree'][0]
+        tree['subtree'][1]['parent'] = tree
+
+        board = self.board 
+        size = conf['SIZE']
+
+        test_board1 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board1[:,:,:,-1] = 1
+        make_play(0, 0, test_board1)
+        make_play(1, 0, test_board1)
+
+        test_board2 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board2[:,:,:,-1] = 1
+        make_play(0, 0, test_board2)
+        make_play(2, 0, test_board2)
+
+        class DummyModel(object):
+            def predict_on_batch(_, X):
+                size = conf['SIZE']
+                board1 = X[0].reshape(1, size, size, 17)
+                board2 = X[1].reshape(1, size, size, 17)
+                self.assertTrue(np.array_equal(board1, test_board1))
+                self.assertTrue(np.array_equal(board2, test_board2))
+                batch_size = X.shape[0]
+                policy = np.zeros((batch_size, size * size + 1), dtype=np.float32)
+                policy[:,0] = 1
+
+                value = np.zeros((batch_size, 1), dtype=np.float32)
+                value[:] = 1
+                return policy, value
+        model = DummyModel()
+        # Remove the symmetries for reproductibility
+
+        simulate(tree, board, model, mcts_batch_size=2)
+
+    def test_model_evaluation_other_nested(self):
+        tree = {
+            'count': 0,
+            'mean_value': 0,
+            'value': 0,
+            'parent': None,
+            'subtree':{
+                0:{
+                    'count': 0,
+                    'p': 1,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {},
+                }, 
+                1: {
+                    'count': 0,
+                    'p': 0,
+                    'mean_value': 0,
+                    'value': 0,
+                    'subtree': {
+                        0: {
+                            'count': 0,
+                            'p': 0,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        },
+                        2: {
+                            'count': 0,
+                            'p': 1,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        }
+                    }
+                }
+            }
+        }
+        tree['subtree'][0]['parent'] = tree
+        tree['subtree'][1]['parent'] = tree
+        tree['subtree'][1]['subtree'][0]['parent'] = tree['subtree'][1]
+        tree['subtree'][1]['subtree'][2]['parent'] = tree['subtree'][1]
+
+        board = self.board 
+        size = conf['SIZE']
+
+        test_board1 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board1[:,:,:,-1] = 1
+        make_play(0, 0, test_board1)
+
+        test_board2 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board2[:,:,:,-1] = 1
+        make_play(1, 0, test_board2)
+        make_play(2, 0, test_board2)
+
+        class DummyModel(object):
+            def predict_on_batch(_, X):
+                size = conf['SIZE']
+                board1 = X[0].reshape(1, size, size, 17)
+                board2 = X[1].reshape(1, size, size, 17)
+                self.assertTrue(np.array_equal(board1, test_board1))
+                self.assertTrue(np.array_equal(board2, test_board2))
+                batch_size = X.shape[0]
+                policy = np.zeros((batch_size, size * size + 1), dtype=np.float32)
+                policy[:,0] = 1
+
+                value = np.zeros((batch_size, 1), dtype=np.float32)
+                value[:] = 1
+                return policy, value
+        model = DummyModel()
+
+        simulate(tree, board, model, mcts_batch_size=2)
+
+    def test_small_batch_size(self):
+        tree = self.tree
+        model = self.model
+        board = self.board 
+
+        simulate(tree, board, model, mcts_batch_size=1)
+        self.assertEqual(tree['subtree'][0]['count'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], 1)
+        self.assertNotEqual(tree['subtree'][0]['subtree'], {})
+
+        self.assertEqual(tree['subtree'][1]['count'], 0)
+        self.assertEqual(tree['subtree'][1]['value'], 0)
+        self.assertEqual(tree['subtree'][1]['subtree'], {})
+
+    def test_nested_selected(self):
+        model = self.model
+        board = self.board 
+
+        tree = {
+            'count': 0,
+            'mean_value': 0,
+            'value': 0,
+            'parent': None,
+            'subtree':{
+                0:{
+                    'count': 0,
+                    'p': 1,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {
+                        1: {
+                            'count': 0,
+                            'p': 0,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        },
+                        2: {
+                            'count': 0,
+                            'p': 1,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        }
+                    }
+                }, 
+                1: {
+                    'count': 0,
+                    'p': 0,
+                    'mean_value': 0,
+                    'value': 0,
+                    'subtree': {},
+                }
+            }
+        }
+        tree['subtree'][0]['parent'] = tree
+        tree['subtree'][0]['subtree'][1]['parent'] = tree['subtree'][0]
+        tree['subtree'][0]['subtree'][2]['parent'] = tree['subtree'][0]
+        tree['subtree'][1]['parent'] = tree
+
+        simulate(tree, board, model, mcts_batch_size=2)
+        self.assertEqual(tree['subtree'][0]['count'], 2)
+        self.assertEqual(tree['subtree'][0]['subtree'][1]['count'], 1)
+        self.assertEqual(tree['subtree'][0]['subtree'][2]['count'], 1)
+        self.assertEqual(tree['subtree'][1]['count'], 0)
+        self.assertEqual(tree['subtree'][0]['value'], 2)
+        self.assertEqual(tree['subtree'][0]['mean_value'], 1)
+        self.assertEqual(tree['subtree'][1]['value'], 0)
+
+    def test_nested_other_leaves(self):
+        model = self.model
+        board = self.board 
+
+        tree = {
+            'count': 0,
+            'mean_value': 0,
+            'value': 0,
+            'parent': None,
+            'subtree': {
+                0:{
+                    'count': 0,
+                    'p': .75,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {}
+                }, 
+                1: {
+                    'count': 0,
+                    'p': .25,
+                    'mean_value': 0,
+                    'value': 0,
+                    'subtree': {
+                        0: {
+                            'count': 0,
+                            'p': 1,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        },
+                        2: {
+                            'count': 0,
+                            'p': 0,
+                            'mean_value': 0,
+                            'value': 0,
+                            'subtree': {},
+                        }
+                    }
+                },
+                2:{
+                    'count': 0,
+                    'p': 0,
+                    'value': 0,
+                    'mean_value': 0,
+                    'subtree': {}
+                }, 
+            }
+        }
+        tree['subtree'][0]['parent'] = tree
+        tree['subtree'][1]['parent'] = tree
+        tree['subtree'][1]['subtree'][0]['parent'] = tree['subtree'][1]
+        tree['subtree'][1]['subtree'][2]['parent'] = tree['subtree'][1]
+
+        simulate(tree, board, model, mcts_batch_size=2)
+        self.assertEqual(tree['subtree'][0]['count'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], 1)
+        self.assertEqual(tree['subtree'][1]['value'], 1)
+        self.assertEqual(tree['subtree'][1]['count'], 1)
+        self.assertEqual(tree['subtree'][1]['subtree'][0]['count'], 1)
+        self.assertEqual(tree['subtree'][1]['subtree'][2]['count'], 0)
+        self.assertEqual(tree['count'], 2)
+        self.assertEqual(tree['mean_value'], 1)
+        self.assertEqual(tree['subtree'][2]['count'], 0)
+        self.assertEqual(tree['subtree'][2]['subtree'], {})
+
+class PlayTestCase(unittest.TestCase):
+    def setUp(self):
+        # Remove the symmetries for reproductibility
+        import symmetry
+        symmetry.SYMMETRIES = symmetry.SYMMETRIES[0:1]
+
+    def test_play(self):
+        model = DummyModel()
+        mcts_simulations = 8 # mcts batch size is 8 and we need at least one batch
+        boards_and_policies, winner, _ = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=2)
+
+        size = conf['SIZE']
+        test_board1 = np.zeros((1, size, size, 17), dtype=np.float32)
+        test_board1[:,:,:,-1] = 1
+
+        board, policy = boards_and_policies[0]
+        self.assertTrue(np.array_equal(board, test_board1)) # First board is empty
+
+        self.assertEqual(winner, 0)  # White should win with 5.5 komi after 2 moves
+
+        for move, (board, policy_target) in enumerate(boards_and_policies[::2]): # Black player lost
+            player = board[0,0,0,-1]
+            value_target = 1 if winner == player else -1
+
+            self.assertEqual(player, 1)
+            self.assertEqual(value_target, -1)
+
+        for move, (board, policy_target) in enumerate(boards_and_policies[1::2]): # White player won
+            player = board[0,0,0,-1]
+            value_target = 1 if winner == player else -1
+
+            self.assertEqual(player, 0)
+            self.assertEqual(value_target, 1)
 
 
 
