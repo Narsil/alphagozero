@@ -95,11 +95,11 @@ def create_initial_model(name):
     tf_callback.set_model(model)
     tf_callback.on_epoch_end(0)
     tf_callback.on_train_end(0)
-    best_filename = os.path.join(conf['MODEL_DIR'], 'best_model.h5')
 
     from self_play import self_play
     self_play(model, n_games=conf['N_GAMES'], mcts_simulations=conf['MCTS_SIMULATIONS'])
     model.save(full_filename)
+    best_filename = os.path.join(conf['MODEL_DIR'], 'best_model.h5')
     model.save(best_filename)
     return model
 
@@ -119,3 +119,6 @@ def load_latest_model():
     print("Loaded latest model", model_filename)
     return model
 
+def load_best_model():
+    model = load_model(os.path.join(conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
+    return model

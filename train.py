@@ -12,7 +12,9 @@ EPOCHS_PER_SAVE = conf['EPOCHS_PER_SAVE']
 NUM_WORKERS = conf['NUM_WORKERS']
 VALIDATION_SPLIT = conf['VALIDATION_SPLIT']
 
-def train(model, game_model_name):
+def train(model, game_model_name, epochs=None):
+    if epochs is None:
+        epochs = EPOCHS_PER_SAVE
     name = model.name
     base_name, index = name.split('_')
     new_name = "_".join([base_name, str(int(index) + 1)]) + ".h5"
@@ -24,9 +26,12 @@ def train(model, game_model_name):
     all_files = []
     for root, dirs, files in os.walk(directory):
         for f in files:
+            if f.endswith('.sgf'): # Ignore sgf files.
+                continue
             full_filename = os.path.join(root, f)
             all_files.append(full_filename)
-    for epoch in tqdm.tqdm(range(EPOCHS_PER_SAVE), desc="Epochs"):
+    for epoch in tqdm.tqdm(range(epochs), desc="Epochs"):
+        values = []
         for worker in tqdm.tqdm(range(NUM_WORKERS), desc="Worker_batch"):
             files = sample(all_files, BATCH_SIZE)
 
@@ -37,8 +42,9 @@ def train(model, game_model_name):
                 with h5py.File(filename) as f:
                     board = f['board'][:]
                     policy = f['policy_target'][:]
-                    value_target = f['value_target']
+                    value_target = f['value_target'][()]
 
+                    values.append(value_target)
                     X[j] = board
                     policy_y[j] = value_target
                     value_y[j] = policy
