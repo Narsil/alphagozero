@@ -21,6 +21,7 @@ PyYAML==3.12
 scipy==1.0.0
 simplegeneric==0.8.1
 six==1.11.0
+sgfmill==1.0.0
 tensorflow-gpu==1.4.0
 tensorflow-tensorboard==0.4.0rc2
 tqdm==4.19.4
