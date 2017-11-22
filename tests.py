@@ -624,13 +624,14 @@ class MCTSTestCase(unittest.TestCase):
         board = self.board 
         model = self.model
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player=1)
         self.assertEqual(tree['subtree'][0]['count'], 1)
         self.assertEqual(tree['subtree'][1]['count'], 1)
-        self.assertEqual(tree['subtree'][0]['value'], 1)
-        self.assertEqual(tree['subtree'][1]['value'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], -1)
+        self.assertEqual(tree['subtree'][1]['value'], -1)
         self.assertEqual(tree['count'], 2)
-        self.assertEqual(tree['value'], 2)
+        self.assertEqual(tree['value'], -2)
+        self.assertEqual(tree['mean_value'], -1)
 
 
     def test_model_evaluation(self):
@@ -660,7 +661,7 @@ class MCTSTestCase(unittest.TestCase):
                 return policy, value
         model = DummyModel()
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player=1)
 
     def test_model_evaluation_nested(self):
         tree = {
@@ -733,7 +734,7 @@ class MCTSTestCase(unittest.TestCase):
         model = DummyModel()
         # Remove the symmetries for reproductibility
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player =1)
 
     def test_model_evaluation_other_nested(self):
         tree = {
@@ -804,16 +805,16 @@ class MCTSTestCase(unittest.TestCase):
                 return policy, value
         model = DummyModel()
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player=1)
 
     def test_small_batch_size(self):
         tree = self.tree
         model = self.model
         board = self.board 
 
-        simulate(tree, board, model, mcts_batch_size=1)
+        simulate(tree, board, model, mcts_batch_size=1, original_player=1)
         self.assertEqual(tree['subtree'][0]['count'], 1)
-        self.assertEqual(tree['subtree'][0]['value'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], -1)
         self.assertNotEqual(tree['subtree'][0]['subtree'], {})
 
         self.assertEqual(tree['subtree'][1]['count'], 0)
@@ -866,7 +867,7 @@ class MCTSTestCase(unittest.TestCase):
         tree['subtree'][0]['subtree'][2]['parent'] = tree['subtree'][0]
         tree['subtree'][1]['parent'] = tree
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player=1)
         self.assertEqual(tree['subtree'][0]['count'], 2)
         self.assertEqual(tree['subtree'][0]['subtree'][1]['count'], 1)
         self.assertEqual(tree['subtree'][0]['subtree'][2]['count'], 1)
@@ -928,15 +929,16 @@ class MCTSTestCase(unittest.TestCase):
         tree['subtree'][1]['subtree'][0]['parent'] = tree['subtree'][1]
         tree['subtree'][1]['subtree'][2]['parent'] = tree['subtree'][1]
 
-        simulate(tree, board, model, mcts_batch_size=2)
+        simulate(tree, board, model, mcts_batch_size=2, original_player=1)
         self.assertEqual(tree['subtree'][0]['count'], 1)
-        self.assertEqual(tree['subtree'][0]['value'], 1)
+        self.assertEqual(tree['subtree'][0]['value'], -1)
         self.assertEqual(tree['subtree'][1]['value'], 1)
         self.assertEqual(tree['subtree'][1]['count'], 1)
         self.assertEqual(tree['subtree'][1]['subtree'][0]['count'], 1)
+        self.assertEqual(tree['subtree'][1]['subtree'][0]['value'], 1)
         self.assertEqual(tree['subtree'][1]['subtree'][2]['count'], 0)
         self.assertEqual(tree['count'], 2)
-        self.assertEqual(tree['mean_value'], 1)
+        self.assertEqual(tree['mean_value'], 0)
         self.assertEqual(tree['subtree'][2]['count'], 0)
         self.assertEqual(tree['subtree'][2]['subtree'], {})
 
@@ -952,7 +954,6 @@ class PlayTestCase(unittest.TestCase):
         game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=2)
         winner = game_data['winner']
 
-        size = conf['SIZE']
         test_board1, player = game_init()
 
         board = game_data['moves'][0]['board']
@@ -1001,6 +1002,7 @@ class PlayTestCase(unittest.TestCase):
         # This works because we deactivate exploration and dirichlet noise in order to have
         # deterministic play
         self.assertEqual(self.count, 2)  # Only one 2 trees were created
+
 
 class SGFTestCase(unittest.TestCase):
     def test_save_sgf(self):
