@@ -42,8 +42,35 @@ def show_board(board):
             elif c == -1:
                 print(u"●", end=' ')
             else:
-                print(u".", end=' ')
+                print(u" .", end=' ')
         print("")
+def game_final(real_board):
+    empty=np.where(real_board==0)
+    for y,x in zip(*empty):
+        group=game_final_imp(x,y,real_board)
+        if group is None:
+            return False
+    return True 
+def game_final_imp(x, y,real_board,group=None):
+    if group is None:
+        group=[(x,y)]
+    for dx, dy in dxdys:
+        nx = x + dx
+        ny = y + dy
+        if (nx, ny) in group:
+            continue
+        if not(0 <= nx < SIZE and 0 <= ny < SIZE):
+            continue
+        if real_board[ny][nx]==0:
+            # if continue at last 4 empty intersection ,may be we can consider game not end 
+            if len(group)==3:
+                return None 
+            group.append( (nx, ny) )
+            group=game_final_imp(nx,ny,real_board,group)
+            if group is None:
+                return None
+        
+    return group
 
 dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 def capture_group(x, y, real_board, group=None):
@@ -186,3 +213,6 @@ def choose_first_player(model1, model2):
     else:
         other_model, current_model = model1, model2
     return current_model, other_model
+def decide_disable_resign():
+    return random() < .1
+
