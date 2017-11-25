@@ -11,14 +11,13 @@ def save_game_sgf(model_name, game_n, game_data):
 
     modelB_name = game_data['modelB_name']
     modelW_name = game_data['modelW_name']
-    winner = game_data['winner']
+    result = game_data['result']
 
     game.root.set_raw("PB", modelB_name.encode('utf-8'))
     game.root.set_raw("PW", modelW_name.encode('utf-8'))
     game.root.set_raw("KM", str(conf['KOMI']).encode('utf-8'))
 
-    winner_b = b"B" if winner == 1 else b"W"
-    game.root.set_raw("RE", winner_b)
+    game.root.set_raw("RE", result.encode('utf-8'))
     for move_data in game_data['moves']:
         node = game.extend_main_sequence()
         color = 'b' if move_data['player'] == 1 else 'w'

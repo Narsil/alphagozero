@@ -15,11 +15,14 @@ from play import (
     choose_first_player,
     show_board, get_winner,
 )
+from random import random
 
 SIZE = conf['SIZE']
 MCTS_BATCH_SIZE = conf['MCTS_BATCH_SIZE']
 DIRICHLET_ALPHA = conf['DIRICHLET_ALPHA']
 DIRICHLET_EPSILON = conf['DIRICHLET_EPSILON']
+RESIGNATION_PERCENT = conf['RESIGNATION_PERCENT']
+RESIGNATION_ALLOWED_ERROR = conf['RESIGNATION_ALLOWED_ERROR']
 Cpuct = 1
 
 def show_tree(x, y, tree, indent=''):
@@ -188,7 +191,7 @@ def select_play(policy, board, mcts_simulations, mcts_tree, temperature, model):
     return index
 
 
-def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False, num_moves=None):
+def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False, num_moves=None, resign_model1=None, resign_model2=None):
     board, player = game_init()
     moves = []
 
@@ -207,6 +210,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
     end_reason = "PLAYED ALL MOVES"
     if num_moves is None:
         num_moves = SIZE * SIZE * 2
+
     for move_n in range(num_moves):
         last_value = value
         if move_n == stop_exploration:
@@ -214,6 +218,10 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         policies, values = current_model.predict_on_batch(board)
         policy = policies[0]
         value = values[0]
+        resign = resign_model1 if current_model == model1 else resign_model2
+        if resign and value <= resign:
+            end_reason = "resign"
+            break
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
         if not mcts_tree or not mcts_tree['subtree']:
             mcts_tree = new_tree(policy, board, add_noise=self_play)
@@ -269,35 +277,14 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             print("")
             show_board(board)
             print("")
-    else:
-        # When finishing due to ending the game, add the last configuration
-        # to the data
-        policies, values = current_model.predict_on_batch(board)
-        policy = policies[0]
-        value = values[0]
-        if not mcts_tree or not mcts_tree['subtree']:
-            mcts_tree = new_tree(policy, board, add_noise=self_play)
-        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
-        x, y = index2coord(index)
-
-        policy_target = np.zeros(SIZE*SIZE + 1)
-        for index, d in mcts_tree['subtree'].items():
-            policy_target[index] = d['p']
-        move_data = {
-            'board': np.copy(board),
-            'policy': policy_target,
-            'value': value,
-            'move': (x, y),
-            'move_n': move_n,
-            'player': player,
-        }
-        moves.append(move_data)
-
 
 
     winner, black_points, white_points = get_winner(board)
     player_string = {1: "B", 0: "D", -1: "W"}
-    winner_string = "%s+%s" % (player_string[winner], abs(black_points - white_points))
+    if end_reason == "resign":
+        winner_string = "%s+R" % (player_string[player])
+    else:
+        winner_string = "%s+%s" % (player_string[winner], abs(black_points - white_points))
     winner_result = {1: 1, -1: 0, 0: None}
 
     if winner == 0:
@@ -331,6 +318,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         'winner': winner_result[winner],
         'winner_model': winner_model.name,
         'result': winner_string,
+        'resign_model1': resign_model1,
+        'resign_model2': resign_model2,
     }
     return game_data
 
@@ -339,12 +328,35 @@ def self_play(model, n_games, mcts_simulations):
     desc = "Self play %s" % model.name
     games = tqdm.tqdm(range(n_games), desc=desc)
     games_data = []
+    current_resign = None
+    min_values = []
     for game in games:
+
+        if random() > RESIGNATION_PERCENT:
+            resign = current_resign
+        else:
+            resign = None
+
         start = datetime.datetime.now()
-        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True)
+        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, resign_model1=resign, resign_model2=resign)
         stop = datetime.datetime.now()
+
+        # If we did not use resignation, we had the result towards resign value.
+        if resign == None:
+            winner = game_data['winner']
+            if winner == 1:
+                min_value = min([move['value'] for move in game_data['moves'][::2]])
+            else:
+                min_value = min([move['value'] for move in game_data['moves'][1::2]])
+            min_values.append(min_value)
+            l = len(min_values)
+            resignation_index = int(RESIGNATION_ALLOWED_ERROR * l)
+            if resignation_index > 0:
+                current_resign = min_values[resignation_index]
+
         moves = len(game_data['moves'])
-        games.set_description(desc + " %s moves %.2fs/move " % (moves, (stop - start).seconds / moves))
+        speed = ((stop - start).seconds / moves) if moves else 0.
+        games.set_description(desc + " %s moves %.2fs/move " % (moves, speed))
         save_game_data(model.name, game, game_data)
         games_data.append(game_data)
     return games_data

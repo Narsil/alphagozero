@@ -21,6 +21,9 @@ conf = {
     'DIRICHLET_ALPHA': .03, # The value of dirichlet coefficient in the nois of root_node of mcts simulation
     'DIRICHLET_EPSILON': .25, # How much the noise is accounted for
 
+    'RESIGNATION_PERCENT': .10, # 10% of the time we don't use resignation to assess resignation value
+    'RESIGNATION_ALLOWED_ERROR': .05, # 5% of the time we resign a game we could have won
+
     ### TRAIN ###
     'TRAIN_BATCH_SIZE': 32,  # Batch size in the training phase, 32 in paper
     'EPOCHS_PER_SAVE': 100, # A model will be saved to be evaluated this amount of epochs, 1000 in paper
@@ -34,6 +37,4 @@ conf = {
 
     ### EVALUATOR ###
     'SGF_ENABLED': True,
-    'SGF_DIR': 'games_sgf',
-
 }

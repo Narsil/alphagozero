@@ -98,7 +98,6 @@ class SelfPlayTestCase(unittest.TestCase):
             return fn(this, *args, **kwargs)
         model.predict_on_batch = monkey_patch
             
-        # Disable tqdm output
         # mcts batch size is 8 and we need at least one batch
         games_data = self_play(model, n_games=2, mcts_simulations=8)
 
@@ -115,6 +114,17 @@ class SelfPlayTestCase(unittest.TestCase):
         moves = len(games_data[0]['moves']) + len(games_data[1]['moves'])
 
         self.assertEqual(self.count, 5 * moves) # 4 predictions for mcts simulation + 1 to get policy
+
+    def test_self_play_resign(self):
+        model = DummyModel()
+        games_data = self_play(model, n_games=50, mcts_simulations=8)
+
+        self.assertEqual(len(games_data), 50)
+
+        resign_games = len([g for g in games_data if g['resign_model1'] != None and g['resign_model2'] != None])
+        no_resign_games = len([g for g in games_data if g['resign_model1'] == None or g['resign_model2'] == None])
+        self.assertEqual(resign_games, 28)
+        self.assertEqual(no_resign_games, 22)
 
 
 class TestModelSavingTestCase(unittest.TestCase):

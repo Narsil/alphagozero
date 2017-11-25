@@ -35,8 +35,7 @@ tensorboard --logdir=logs
 
 ### Self Play
 
-Most of the implementations corresponds to what is described in the paper.
-TODO is the batching of MCTS Simulations. Original paper is generating policies by batches of 8. This can lead to an 8x speedup.
+Implementations should correspond to what is described in the paper.
 
 ### Train
 
@@ -53,7 +52,6 @@ Want to contribute? Pull Requests more than welcome.
 
 TODOS:
  - Improve the tests (Right now basic gameplay functions are tested)
- - Add resignation value (10% of the games go all the way, to make sure the dynamic threshold for which there is a false positive of 5% at most)
  - Find ways to distribute the work.
 
 

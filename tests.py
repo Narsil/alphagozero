@@ -36,11 +36,11 @@ class DummyModel(object):
         size = conf['SIZE']
         batch_size = X.shape[0]
         policy = np.zeros((batch_size, size * size + 1), dtype=np.float32)
-        for i in range(batch_size):
-            policy[i,:] = 1./(size*size +1)
-
         value = np.zeros((batch_size, 1), dtype=np.float32)
-        value[:] = 1
+        for i in range(batch_size):
+            policy[i,:] = list(reversed(range(1, size*size + 2)))
+        policy[:,:] /= np.sum(policy, axis=1)[:,np.newaxis]
+        value[:, :] = 1
         return policy, value
 
 class TestGoMethods(unittest.TestCase):
@@ -947,6 +947,8 @@ class PlayTestCase(unittest.TestCase):
         # Remove the symmetries for reproductibility
         import symmetry
         symmetry.SYMMETRIES = symmetry.SYMMETRIES[0:1]
+        from random import seed
+        seed(0)
 
     def test_play(self):
         model = DummyModel()
@@ -998,7 +1000,7 @@ class PlayTestCase(unittest.TestCase):
 
         model = DummyModel()
         mcts_simulations = 32 #  We want some mcts exploration
-        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=10)
+        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=2)
         # This works because we deactivate exploration and dirichlet noise in order to have
         # deterministic play
         self.assertEqual(self.count, 2)  # Only one 2 trees were created
@@ -1008,7 +1010,7 @@ class SGFTestCase(unittest.TestCase):
     def test_save_sgf(self):
         model = DummyModel()
         mcts_simulations = 8 # mcts batch size is 8 and we need at least one batch
-        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=2)
+        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=10)
         save_game_sgf("test_model", 0, game_data)
 
         os.remove("games/test_model/game_000.sgf")
