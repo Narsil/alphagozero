@@ -8,7 +8,7 @@ import numpy as np
 import os
 from play import (
         color_board, _get_points, capture_group, make_play, legal_moves,
-        index2coord, game_init,
+        index2coord, game_init,game_final,
 )
 from self_play import (
         play_game, simulate,
@@ -206,7 +206,30 @@ class TestGoMethods(unittest.TestCase):
         for x, y in target_group:
             group = capture_group(x, y, board)
             self.assertEqual(sorted(group), sorted(target_group))
-
+    def test_game_not_final(self):
+        board=np.array(
+                    [[1, 0,-1, 0, 1, 1, 1, 1, 1],
+                     [1, 0, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 0, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1,-1,-1,-1],
+                     [1, 1, 1, 1, 1, 1,-1,-1,-1],
+                     [1, 1, 1, 1, 1, 1,-1,-1, 0],
+                     [1, 1, 1, 1, 1,-1, 0, 0, 0]])
+        self.assertEqual(game_final(board), False)
+    def test_game_final(self):
+        board=np.array(
+                    [[1, 0, 0, 0, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1,-1,-1, 0]])
+        self.assertEqual(game_final(board), True)
 class TestBoardMethods(unittest.TestCase):
     def test_self_sucide(self):
         board, player = game_init()

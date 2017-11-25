@@ -4,8 +4,8 @@ conf = {
     'LOG_DIR': 'logs',
     'GAMES_DIR': 'games',
     'BEST_MODEL': 'best_model.h5',
-    'SHOW_EACH_MOVE': False,
-    'SHOW_END_GAME': False,
+    'SHOW_EACH_MOVE': True,
+    'SHOW_END_GAME': True,
 
     ### MODEL ###
     'N_RESIDUAL_BLOCKS': 20, # Size of the tower of residual blocks, 20 for small model, 40 for alphagozero full size

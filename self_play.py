@@ -13,7 +13,8 @@ from sgfsave import save_game_sgf
 from play import (
     legal_moves, index2coord, make_play, game_init,
     choose_first_player,
-    show_board, get_winner,
+    show_board, get_winner,game_final,get_real_board,
+    decide_disable_resign,
 )
 
 SIZE = conf['SIZE']
@@ -156,7 +157,7 @@ def simulate(node, board, model, mcts_batch_size, original_player):
         make_play(x, y, board)
         simulate(selected_node, board, model, mcts_batch_size, original_player)
 
-def mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model):
+def mcts_decision(value,policy, board, mcts_simulations, mcts_tree, temperature, model,skip_resign=False):
     for i in range(int(mcts_simulations/MCTS_BATCH_SIZE)):
         test_board = np.copy(board)
         original_player = board[0,0,0,-1]
@@ -175,18 +176,25 @@ def mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model
             ps.append(p)
         selected_a = np.random.choice(moves, size=1, p=ps)[0]
     elif temperature == 0:
-        _, _, selected_a = max((dic['count'], dic['mean_value'], a) for a, dic in mcts_tree['subtree'].items())
+        if skip_resign:
+            _, _, selected_a = max((dic['count'], dic['mean_value'], a) 
+                    for a, dic in mcts_tree['subtree'].items()
+                    if a<SIZE*SIZE)
+        elif value<0.05:
+            selected_a=SIZE*SIZE
+        else :
+            _, _, selected_a = max((dic['count'], dic['mean_value'], a) for a, dic in mcts_tree['subtree'].items())
     return selected_a
 
-def select_play(policy, board, mcts_simulations, mcts_tree, temperature, model):
+def select_play(value,policy, board, mcts_simulations, mcts_tree, temperature, model,skip_resign=False):
     mask = legal_moves(board)
     policy = ma.masked_array(policy, mask=mask)
-    index = mcts_decision(policy, board, mcts_simulations, mcts_tree, temperature, model)
+    index = mcts_decision(value,policy, board, mcts_simulations, mcts_tree,
+            temperature, model,skip_resign=skip_resign)
 
     # index = np.argmax(policy)
     x, y = index2coord(index)
     return index
-
 
 def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=False, num_moves=None):
     board, player = game_init()
@@ -207,6 +215,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
     end_reason = "PLAYED ALL MOVES"
     if num_moves is None:
         num_moves = SIZE * SIZE * 2
+    disable_resign=decide_disable_resign()
+    skip_resign=False
     for move_n in range(num_moves):
         last_value = value
         if move_n == stop_exploration:
@@ -220,8 +230,11 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             if self_play:
                 other_mcts = mcts_tree
 
+        if disable_resign:
+            skip_resign=not game_final(get_real_board(board))
 
-        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
+        
+        index = select_play(value,policy, board, mcts_simulations, mcts_tree, temperature, current_model,skip_resign)
         x, y = index2coord(index)
 
         policy_target = np.zeros(SIZE*SIZE + 1)
@@ -238,7 +251,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         }
         moves.append(move_data)
 
-        if skipped_last and y == SIZE:
+        if skipped_last and y == SIZE :
             end_reason = "BOTH_PASSED"
             break
         skipped_last = y == SIZE
@@ -265,7 +278,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             # Inverted here because we already swapped players
             color = "W" if player == 1 else "B"
 
-            print("%s(%s,%s)" % (color, x, y)) 
+            print("hand %s %s(%s,%s)" % (move_n,color, x, y)) 
             print("")
             show_board(board)
             print("")
@@ -277,7 +290,8 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         value = values[0]
         if not mcts_tree or not mcts_tree['subtree']:
             mcts_tree = new_tree(policy, board, add_noise=self_play)
-        index = select_play(policy, board, mcts_simulations, mcts_tree, temperature, current_model)
+        index = select_play(value,policy, board, mcts_simulations, 
+                mcts_tree, temperature, current_model,skip_resign)
         x, y = index2coord(index)
 
         policy_target = np.zeros(SIZE*SIZE + 1)
