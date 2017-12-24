@@ -10,9 +10,6 @@ def index2coord(index):
     x = index - SIZE * y
     return x, y
 
-def coord2index(x, y):
-    return y * SIZE + x
-
 def legal_moves(board):
     # Occupied places
     mask1 = board[0,:,:,0].reshape(-1) != 0
@@ -36,26 +33,17 @@ def get_real_board(board):
         real_board = board[0,:,:,1] - board[0,:,:,0]
     return real_board
 
-def show_board(board, policy=None):
+def show_board(board):
     real_board = get_real_board(board)
-    if policy is not None:
-        index = policy.argmax()
-        x, y = index2coord(index)
-    string = ""
-    for j, row in enumerate(real_board):
-        for i, c in enumerate(row):
+    for row in real_board:
+        for c in row:
             if c == 1:
-                string += u"○ "
+                print(u"○", end=' ')
             elif c == -1:
-                string += u"● "
-            elif policy is not None and i == x and j == y:
-                string += u"X "
+                print(u"●", end=' ')
             else:
-                string += u". "
-        string += "\n"
-    if policy is not None and y == SIZE:
-        string += "Pass policy"
-    return string
+                print(u".", end=' ')
+        print("")
 
 dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 def capture_group(x, y, real_board, group=None):
@@ -131,7 +119,7 @@ def make_play(x, y, board):
         pass
     # swap_players
     board[:,:,:,range(16)] = board[:,:,:,SWAP_INDEX]
-    player = -1 if player == 1 else 1
+    player = 0 if player == 1 else 1
     board[:,:,:,-1] = player
     return board, player
 
@@ -191,3 +179,10 @@ def game_init():
     player = 1
     board[:,:,:,-1] = player
     return board, player
+
+def choose_first_player(model1, model2):
+    if random() < .5:
+        current_model, other_model = model1, model2
+    else:
+        other_model, current_model = model1, model2
+    return current_model, other_model

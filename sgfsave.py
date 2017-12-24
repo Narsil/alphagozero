@@ -27,11 +27,20 @@ def save_game_sgf(model_name, game_n, game_data):
 
         move_n = move_data['move_n']
         next_board = game_data['moves'][(move_n + 1) % len(game_data['moves'])]['board']
-        comment = "Value %s\nPlayer %s\nMove %s\nMove sgf %s, %s\n %s" % (move_data['value'], move_data['player'], move_data['move'], color, move, get_real_board(next_board))
+        comment = "Value %s\n %s" % (move_data['value'], get_real_board(next_board))
         node.set("C", comment)
         node.set_move(color, move)
 
 
+    try:
+        os.makedirs(os.path.join(conf['GAMES_DIR'], model_name))
+    except OSError:
+        pass
+
     filename = os.path.join(conf["GAMES_DIR"], model_name, "game_%03d.sgf" % game_n)
+    while os.path.isfile(filename):
+        game_n += 1
+        filename = os.path.join(conf["GAMES_DIR"], model_name, "game_%03d.sgf" % game_n)
+
     with open(filename, "wb") as f:
         f.write(game.serialise())

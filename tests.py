@@ -11,9 +11,8 @@ from play import (
         index2coord, game_init,
 )
 from self_play import (
-        play_game
+        play_game, simulate,
 )
-from engine import simulate
 from symmetry import (
         _id,
         left_diagonal, reverse_left_diagonal,
@@ -962,7 +961,7 @@ class PlayTestCase(unittest.TestCase):
         board = game_data['moves'][0]['board']
         self.assertTrue(np.array_equal(board, test_board1)) # First board is empty
 
-        self.assertEqual(winner, -1)  # White should win with 5.5 komi after 2 moves
+        self.assertEqual(winner, 0)  # White should win with 5.5 komi after 2 moves
 
         for move, move_data in enumerate(game_data['moves'][::2]): # Black player lost
             value_target = 1 if winner == move_data['player'] else -1
@@ -973,17 +972,17 @@ class PlayTestCase(unittest.TestCase):
         for move, move_data in enumerate(game_data['moves'][1::2]): # White player won
             value_target = 1 if winner == move_data['player'] else -1
 
-            self.assertEqual(move_data['player'], -1)
+            self.assertEqual(move_data['player'], 0)
             self.assertEqual(value_target, 1)
 
     def test_new_tree_called_once_self_play(self):
-        from engine import Tree
-        fn = Tree.new_tree
+        import self_play
+        fn = self_play.new_tree
         self.count = 0
         def monkey_patch_new_tree(*args, **kwargs):
             self.count += 1
             return fn(*args, **kwargs)
-        Tree.new_tree = monkey_patch_new_tree
+        self_play.new_tree = monkey_patch_new_tree
 
         model = DummyModel()
         mcts_simulations = 8 #  We want some mcts exploration
@@ -991,33 +990,30 @@ class PlayTestCase(unittest.TestCase):
         self.assertEqual(self.count, 1)  # Only one tree was created
 
     def test_new_tree_called_twice_evaluation(self):
-        from engine import Tree
-        fn = Tree.new_tree
+        import self_play
+        fn = self_play.new_tree
         self.count = 0
         def monkey_patch_new_tree(*args, **kwargs):
             self.count += 1
             return fn(*args, **kwargs)
-        Tree.new_tree = monkey_patch_new_tree
+        self_play.new_tree = monkey_patch_new_tree
 
         model = DummyModel()
         mcts_simulations = 32 #  We want some mcts exploration
-        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=100)
+        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=2)
         # This works because we deactivate exploration and dirichlet noise in order to have
         # deterministic play
-        self.assertEqual(self.count, 2)  # Only 2 trees were created
+        self.assertEqual(self.count, 2)  # Only one 2 trees were created
 
 
 class SGFTestCase(unittest.TestCase):
     def test_save_sgf(self):
         model = DummyModel()
         mcts_simulations = 8 # mcts batch size is 8 and we need at least one batch
-        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=100)
+        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=10)
+        save_game_sgf("test_model", 0, game_data)
 
-
-        os.makedirs("games/test_model")
-        save_game_sgf("test_model", 1, game_data)
-
-        os.remove("games/test_model/game_001.sgf")
+        os.remove("games/test_model/game_000.sgf")
         os.removedirs("games/test_model")
 
 if __name__ == '__main__':

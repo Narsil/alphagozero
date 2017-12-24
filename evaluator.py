@@ -3,7 +3,6 @@ from conf import conf
 import os
 from tqdm import tqdm
 import datetime
-from random import random
 
 MCTS_SIMULATIONS = conf['MCTS_SIMULATIONS']
 EVALUATE_N_GAMES = conf['EVALUATE_N_GAMES']
@@ -21,13 +20,7 @@ def evaluate(best_model, tested_model):
     tq = tqdm(range(EVALUATE_N_GAMES), desc=desc)
     for game in tq:
         start = datetime.datetime.now()
-
-        if random() < .5:
-            model1, model2 = best_model, tested_model
-        else:
-            model2, model1 = best_model, tested_model
-
-        game_data = play_game(model1, model2, MCTS_SIMULATIONS, stop_exploration=0)
+        game_data = play_game(best_model, tested_model, MCTS_SIMULATIONS, stop_exploration=0)
         stop = datetime.datetime.now()
 
         winner_model = game_data['winner_model']
@@ -38,7 +31,7 @@ def evaluate(best_model, tested_model):
         new_desc = desc + " (winrate:%s%% %.2fs/move)" % (int(wins/total*100), (stop - start).seconds / moves)
         tq.set_description(new_desc)
 
-        save_game_data(best_model.name, game_data)
+        save_game_data(best_model.name, game, game_data)
 
 
     if wins/total > EVALUATE_MARGIN:
