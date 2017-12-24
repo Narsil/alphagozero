@@ -45,6 +45,7 @@ def train(model, game_model_name, epochs=None):
                     value_target = f['value_target'][()]
 
                     values.append(value_target)
+
                     X[j] = board
                     policy_y[j] = value_target
                     value_y[j] = policy
