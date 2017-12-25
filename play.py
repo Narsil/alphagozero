@@ -1,4 +1,4 @@
-from random import random
+# -*- coding: utf-8 -*-
 import numpy as np
 from conf import conf
 

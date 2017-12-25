@@ -39,12 +39,18 @@ class Engine(object):
         number = move[1:]
 
         x = string.ascii_uppercase.index(letter)
+        if x >= 9:
+            x -= 1 # I is a skipped letter
         y = int(number) - 1
         x, y = x, SIZE - y - 1
         return x, y
 
     def print_move(self, x, y):
         x, y = x, SIZE - y - 1
+
+        if x >= 8:
+            x += 1 # I is a skipped letter
+
         move = string.ascii_uppercase[x] + str(y + 1)
         return move
 
@@ -71,7 +77,9 @@ class Engine(object):
         return ""
 
     def parse_command(self, line):
-        command, *args = line.strip().split(" ")
+        tokens = line.strip().split(" ")
+        command = tokens[0]
+        args = tokens[1:]
         method = getattr(self, command)
         result = method(*args)
         return "= " + result + "\n\n"
