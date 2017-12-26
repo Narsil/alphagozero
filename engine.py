@@ -32,18 +32,28 @@ def new_subtree(policy, board, parent, add_noise=False):
         tmp = (1 - DIRICHLET_EPSILON) * tmp + DIRICHLET_EPSILON * noise
 
 
-    for move, p in enumerate(tmp):
+    parent_move = parent['move']
+    parent_player = board[0, 0, 0, -1]
+
+    assert (parent_player == 1 and parent_move % 2 == 1) or (parent_player == -1 and parent_move % 2 == 0)
+
+    move = parent_move + 1
+    for action, p in enumerate(tmp):
         if isinstance(p, MaskedConstant):
             continue
 
-        leaf[move] = {
+
+        leaf[action] = {
             'count': 0,
             'value': 0,
             'mean_value': 0,
             'p': p,
             'subtree':{},
             'parent': parent,
+            'move': move,
         }
+
+
 
     return leaf
 
@@ -68,7 +78,6 @@ def simulate(node, board, model, mcts_batch_size, original_player):
     node_subtree = node['subtree']
     max_actions = top_n_actions(node_subtree, mcts_batch_size)
 
-    leg = legal_moves(board)
     max_a = max_actions[0]['action']
 
     selected_action = max_a
@@ -100,7 +109,7 @@ def simulate(node, board, model, mcts_batch_size, original_player):
             else:
                 tmp_board = np.copy(board)
                 x, y = index2coord(action)
-                make_play(x, y, tmp_board)
+                tmp_board, _ = make_play(x, y, tmp_board)
                 boards[i] = tmp_board
 
         # The random symmetry will changes boards, so copy them before hand
@@ -108,15 +117,21 @@ def simulate(node, board, model, mcts_batch_size, original_player):
 
         policies, values = random_symmetry_predict(model, boards)
 
-        for policy, v, board, action in zip(policies, values, presymmetry_boards, max_actions):
-            shape = board.shape
-            board = board.reshape([1] + list(shape))
-            player = board[0,0,0,-1]
+        for i, (policy, v, tmp_board, action) in enumerate(zip(policies, values, presymmetry_boards, max_actions)):
+            shape = tmp_board.shape
+            tmp_board = tmp_board.reshape([1] + list(shape))
+            player = tmp_board[0,0,0,-1]
             # Inverse value if we're looking from other player perspective
             value = v[0] if player == original_player else -v[0]
 
-            subtree = new_subtree(policy, board, node)
             leaf_node = action['node']
+            subtree = new_subtree(policy, tmp_board, leaf_node)
+            
+
+            move = leaf_node['move']
+            assert (player == 1 and move % 2 == 1) or (player == -1 and move % 2 == 0)
+
+
             leaf_node['subtree'] = subtree
 
             current_node = leaf_node
@@ -167,7 +182,7 @@ class Tree(object):
     def __init__(self):
         self.tree = None
 
-    def new_tree(self, policy, board, add_noise=False):
+    def new_tree(self, policy, board, move=1, add_noise=False):
         mcts_tree = {
             'count': 0,
             'value': 0,
@@ -175,17 +190,18 @@ class Tree(object):
             'p': 1,
             'subtree':{},
             'parent': None,
+            'move': move,
         }
-        subtree = new_subtree(policy, board, parent=mcts_tree, add_noise=add_noise)
+        subtree = new_subtree(policy, board, mcts_tree, add_noise=add_noise)
         mcts_tree['subtree'] = subtree
         self.tree = mcts_tree
         return mcts_tree
 
     def play(self, index):
-        try:
+        if self.tree and index in self.tree['subtree']:
             self.tree = self.tree['subtree'][index]
             self.tree['parent'] = None # Cut the tree
-        except:
+        else:
             self.tree = None
 
 
@@ -198,16 +214,20 @@ class ModelEngine(object):
         self.board = board
         self.add_noise = add_noise
         self.tree = Tree()
+        self.move = 1
 
     def set_temperature(self, temperature):
         self.temperature = temperature
 
-    def play(self, color, x, y):
+    def play(self, color, x, y, update_tree=True):
         index = coord2index(x, y)
 
-        self.tree.play(index)
+        if update_tree:
+            self.tree.play(index)
 
-        self.board, _ = make_play(x, y, self.board)
+        self.board, player = make_play(x, y, self.board)
+        self.move += 1
+        return self.board, player
 
     def genmove(self, color):
         policies, values = self.model.predict_on_batch(self.board)
@@ -216,11 +236,11 @@ class ModelEngine(object):
         if self.resign and value <= self.resign:
             x = 0
             y = SIZE + 1
-            return x, y, policy, value
+            return x, y, policy, value, self.board, self.plyaer
 
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
         if not self.tree.tree or not self.tree.tree['subtree']:
-            self.tree.new_tree(policy, self.board, add_noise=self.add_noise)
+            self.tree.new_tree(policy, self.board, move=self.move, add_noise=self.add_noise)
 
 
         index = select_play(policy, self.board, self.mcts_simulations, self.tree.tree, self.temperature, self.model)
@@ -230,5 +250,5 @@ class ModelEngine(object):
         for _index, d in self.tree.tree['subtree'].items():
             policy_target[_index] = d['p']
 
-        self.board, _ = make_play(x, y, self.board)
-        return x, y, policy_target, value
+        self.board, self.player = self.play(color, x, y)
+        return x, y, policy_target, value, self.board, self.player

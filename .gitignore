@@ -2,3 +2,4 @@ venv
 logs/
 models/
 games/
+*.pyc

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 from conf import conf
-from play import game_init, make_play, show_board
+from play import game_init
 from engine import ModelEngine
 from model import load_best_model
 import string
@@ -35,13 +35,18 @@ class Engine(object):
         return ""
 
     def parse_move(self, move):
-        letter = move[0]
-        number = move[1:]
 
-        x = string.ascii_uppercase.index(letter)
-        if x >= 9:
-            x -= 1 # I is a skipped letter
-        y = int(number) - 1
+        if move == 'pass':
+            x, y = 0, SIZE
+        else:
+            letter = move[0]
+            number = move[1:]
+
+            x = string.ascii_uppercase.index(letter)
+            if x >= 9:
+                x -= 1 # I is a skipped letter
+            y = int(number) - 1
+
         x, y = x, SIZE - y - 1
         return x, y
 
@@ -58,18 +63,19 @@ class Engine(object):
         announced_player = COLOR_TO_PLAYER[color]
         assert announced_player == self.player
         x, y = self.parse_move(move)
-        self.engine.play(color, x, y)
-        self.board, self.player = make_play(x, y, self.board)
+        self.board, self.player = self.engine.play(color, x, y)
         return ""
 
     def genmove(self, color):
         announced_player = COLOR_TO_PLAYER[color]
         assert announced_player == self.player
 
-        x, y, policy_target, value = self.engine.genmove(color)
-        self.board, self.player = make_play(x, y, self.board)
+        x, y, policy_target, value, self.board, self.player = self.engine.genmove(color)
+        self.player = self.board[0, 0, 0, -1]  # engine updates self.board already 
+        with open('logs/gtp.log', 'a') as f:
+            f.write("PLAYER" + str(self.player) + '\n')
         move_string = self.print_move(x, y)
-        result = move_string + "\n\n" + show_board(self.board)
+        result = move_string
         return result
 
     def clear_board(self):
@@ -82,6 +88,8 @@ class Engine(object):
         args = tokens[1:]
         method = getattr(self, command)
         result = method(*args)
+        if not result.strip():
+            return "=\n\n"
         return "= " + result + "\n\n"
 
 def main():
@@ -94,6 +102,7 @@ def main():
             if result.strip():
                 sys.stdout.write(result)
                 sys.stdout.flush()
+                f.write("'''" + str(engine.player) + '\n')
                 f.write(">>>" + result)
                 f.flush()
 

@@ -61,13 +61,13 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
-            engine2.play("B", x, y)
+            engine2.play("B", x, y, update_tree=not self_play)
         else:
             x, y, policy_target, value = engine2.genmove("W")
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
-            engine1.play("B", x, y)
+            engine1.play("B", x, y, update_tree=not self_play)
 
         move_data = {
             'board': np.copy(board),

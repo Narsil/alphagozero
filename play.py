@@ -36,7 +36,7 @@ def get_real_board(board):
         real_board = board[0,:,:,1] - board[0,:,:,0]
     return real_board
 
-def show_board(board, policy=None):
+def _show_board(board, policy):
     real_board = get_real_board(board)
     if policy is not None:
         index = policy.argmax()
@@ -56,6 +56,17 @@ def show_board(board, policy=None):
     if policy is not None and y == SIZE:
         string += "Pass policy"
     return string
+
+def show_board(board, policy=None, history=1):
+    results = []
+    for i in reversed(range(history)):
+        tmp_board = np.copy(board)
+        tmp_board = tmp_board[:,:,:,i:]
+        if i % 2 == 1:
+            tmp_board[:,:,:,-1] *= -1
+        results.append(_show_board(tmp_board, policy))
+    return "\n".join(results)
+
 
 dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 def capture_group(x, y, real_board, group=None):

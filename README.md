@@ -16,6 +16,9 @@ $ python main.py
 The main program will loop indefinitely, hopefully succeeding a building a stong model for Go play.
 So far everything runs in one big loop. It might and up being split in the future in multiple threads/processes/workers.
 
+If you want to play against a model to check its strength, you can use it's GTP support.
+Just add the `gtp.py` file as an engine. Crude implementation for now.
+
 # Configuration
 
 Everythin is set in the `conf.py` file. All original papers parameters are described in the comments, but for a single machine, single GPU machine,
