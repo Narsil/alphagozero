@@ -13,6 +13,8 @@ import os
 
 SIZE = conf['SIZE']
 L2_EPSILON = conf['L2_EPSILON']
+LEARNING_RATE = conf['LEARNING_RATE']
+MOMENTUM = conf['MOMENTUM']
 
 REGULARIZERS = {
     'kernel_regularizer': l2(L2_EPSILON),
@@ -76,7 +78,7 @@ def build_model(name):
         value_out = Dense(1, activation='tanh', name="value_out", **REGULARIZERS)(value_hidden)
 
     model = Model(inputs=[_input], outputs=[policy_out, value_out], name=name)
-    sgd = SGD(lr=1e-2, momentum = 0.9)
+    sgd = SGD(lr=LEARNING_RATE, momentum = MOMENTUM)
     model.compile(sgd, loss=loss)
     return model
 

@@ -1,4 +1,4 @@
-from random import random
+# -*- coding: utf-8 -*-
 import numpy as np
 from conf import conf
 
@@ -9,6 +9,9 @@ def index2coord(index):
     y = index // SIZE
     x = index - SIZE * y
     return x, y
+
+def coord2index(x, y):
+    return y * SIZE + x
 
 def legal_moves(board):
     # Occupied places
@@ -33,17 +36,37 @@ def get_real_board(board):
         real_board = board[0,:,:,1] - board[0,:,:,0]
     return real_board
 
-def show_board(board):
+def _show_board(board, policy):
     real_board = get_real_board(board)
-    for row in real_board:
-        for c in row:
+    if policy is not None:
+        index = policy.argmax()
+        x, y = index2coord(index)
+    string = ""
+    for j, row in enumerate(real_board):
+        for i, c in enumerate(row):
             if c == 1:
-                print(u"○", end=' ')
+                string += u"○ "
             elif c == -1:
-                print(u"●", end=' ')
+                string += u"● "
+            elif policy is not None and i == x and j == y:
+                string += u"X "
             else:
-                print(u".", end=' ')
-        print("")
+                string += u". "
+        string += "\n"
+    if policy is not None and y == SIZE:
+        string += "Pass policy"
+    return string
+
+def show_board(board, policy=None, history=1):
+    results = []
+    for i in reversed(range(history)):
+        tmp_board = np.copy(board)
+        tmp_board = tmp_board[:,:,:,i:]
+        if i % 2 == 1:
+            tmp_board[:,:,:,-1] *= -1
+        results.append(_show_board(tmp_board, policy))
+    return "\n".join(results)
+
 
 dxdys = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 def capture_group(x, y, real_board, group=None):
@@ -119,7 +142,7 @@ def make_play(x, y, board):
         pass
     # swap_players
     board[:,:,:,range(16)] = board[:,:,:,SWAP_INDEX]
-    player = 0 if player == 1 else 1
+    player = -1 if player == 1 else 1
     board[:,:,:,-1] = player
     return board, player
 
@@ -179,10 +202,3 @@ def game_init():
     player = 1
     board[:,:,:,-1] = player
     return board, player
-
-def choose_first_player(model1, model2):
-    if random() < .5:
-        current_model, other_model = model1, model2
-    else:
-        other_model, current_model = model1, model2
-    return current_model, other_model

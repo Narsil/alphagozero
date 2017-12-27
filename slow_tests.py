@@ -61,7 +61,8 @@ import unittest
 import numpy as np
 import numpy.ma as ma
 from keras.models import load_model
-from self_play import self_play, new_tree, select_play
+from self_play import self_play
+from engine import select_play, Tree
 from model import create_initial_model, load_best_model, loss, build_model
 from play import game_init, make_play, legal_moves
 from train import train
@@ -123,8 +124,8 @@ class SelfPlayTestCase(unittest.TestCase):
 
         resign_games = len([g for g in games_data if g['resign_model1'] != None and g['resign_model2'] != None])
         no_resign_games = len([g for g in games_data if g['resign_model1'] == None or g['resign_model2'] == None])
-        self.assertEqual(resign_games, 28)
-        self.assertEqual(no_resign_games, 22)
+        self.assertEqual(resign_games, 24)
+        self.assertEqual(no_resign_games, 26)
 
 
 class TestModelSavingTestCase(unittest.TestCase):
@@ -246,8 +247,9 @@ class TestModelLearningTestCase(unittest.TestCase):
         policy = policies[0]
         policy[y * SIZE + x], policy[SIZE * SIZE] = policy[SIZE * SIZE], policy[y * SIZE + x] # Make best move sucide
         self.assertEqual(np.argmax(policy), y * SIZE + x) # Best option in policy is sucide
-        tree = new_tree(policy, board)
-        chosen_play = select_play(policy, board, mcts_simulations=128, mcts_tree=tree, temperature=0, model=model)
+        tree = Tree()
+        tree.new_tree(policy, board)
+        chosen_play = select_play(policy, board, mcts_simulations=128, mcts_tree=tree.tree, temperature=0, model=model)
         
         # First simulation chooses pass, second simulation chooses sucide (p is still higher),
         # then going deeper it chooses pass again (value is higher)
@@ -274,8 +276,10 @@ class TestModelLearningTestCase(unittest.TestCase):
         mask = legal_moves(board)
         policy = ma.masked_array(policy, mask=mask)
         self.assertEqual(np.argmax(policy), y * SIZE + x) # Best option in policy is sucide
-        tree = new_tree(policy, board)
-        chosen_play = select_play(policy, board, mcts_simulations=128, mcts_tree=tree, temperature=0, model=model)
+
+        tree = Tree()
+        tree.new_tree(policy, board)
+        chosen_play = select_play(policy, board, mcts_simulations=128, mcts_tree=tree.tree, temperature=0, model=model)
         
         # First simulation chooses pass, second simulation chooses sucide (p is still higher),
         # then going deeper it chooses pass again (value is higher)

@@ -5,14 +5,16 @@ conf['KOMI'] = 5.5  # Override settings for tests
 
 import unittest
 import numpy as np
+import random
 import os
 from play import (
         color_board, _get_points, capture_group, make_play, legal_moves,
         index2coord, game_init,
 )
 from self_play import (
-        play_game, simulate,
+        play_game
 )
+from engine import simulate
 from symmetry import (
         _id,
         left_diagonal, reverse_left_diagonal,
@@ -25,6 +27,7 @@ from symmetry import (
 )
 import itertools
 from sgfsave import save_game_sgf
+from gtp import Engine
 
 class DummyModel(object):
     name = "dummy_model"
@@ -585,18 +588,19 @@ class MCTSTestCase(unittest.TestCase):
         # Remove the symmetries for reproductibility
         import symmetry
         symmetry.SYMMETRIES = symmetry.SYMMETRIES[0:1]
-        size = conf['SIZE']
         tree = {
             'count': 0,
             'mean_value': 0,
             'value': 0,
             'parent': None,
+            'move': 1,
             'subtree': {
                 0:{
                     'count': 0,
                     'p': 1,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {}
                 }, 
                 1: {
@@ -604,6 +608,7 @@ class MCTSTestCase(unittest.TestCase):
                     'p': 0,
                     'mean_value': 0,
                     'value': 0,
+                    'move': 2,
                     'subtree': {}
                 }
             }
@@ -669,18 +674,21 @@ class MCTSTestCase(unittest.TestCase):
             'mean_value': 0,
             'value': 0,
             'parent': None,
+            'move': 1,
             'subtree':{
                 0:{
                     'count': 0,
                     'p': 1,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {
                         1: {       # <----- This will be checked first
                             'count': 0,
                             'p': 1,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         },
                         2: {       # <----- This will be checked second
@@ -688,6 +696,7 @@ class MCTSTestCase(unittest.TestCase):
                             'p': 0,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         }
                     }
@@ -697,6 +706,7 @@ class MCTSTestCase(unittest.TestCase):
                     'p': 0,
                     'mean_value': 0,
                     'value': 0,
+                    'move': 2,
                     'subtree': {},
                 }
             }
@@ -707,7 +717,6 @@ class MCTSTestCase(unittest.TestCase):
         tree['subtree'][1]['parent'] = tree
 
         board = self.board 
-        size = conf['SIZE']
 
         test_board1, player = game_init()
         make_play(0, 0, test_board1)
@@ -742,12 +751,14 @@ class MCTSTestCase(unittest.TestCase):
             'mean_value': 0,
             'value': 0,
             'parent': None,
+            'move': 1,
             'subtree':{
                 0:{
                     'count': 0,
                     'p': 1,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {},
                 }, 
                 1: {
@@ -755,12 +766,14 @@ class MCTSTestCase(unittest.TestCase):
                     'p': 0,
                     'mean_value': 0,
                     'value': 0,
+                    'move': 2,
                     'subtree': {
                         0: {
                             'count': 0,
                             'p': 0,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         },
                         2: {
@@ -768,6 +781,7 @@ class MCTSTestCase(unittest.TestCase):
                             'p': 1,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         }
                     }
@@ -780,7 +794,6 @@ class MCTSTestCase(unittest.TestCase):
         tree['subtree'][1]['subtree'][2]['parent'] = tree['subtree'][1]
 
         board = self.board 
-        size = conf['SIZE']
 
         test_board1, player = game_init()
         make_play(0, 0, test_board1)
@@ -830,18 +843,21 @@ class MCTSTestCase(unittest.TestCase):
             'mean_value': 0,
             'value': 0,
             'parent': None,
+            'move': 1,
             'subtree':{
                 0:{
                     'count': 0,
                     'p': 1,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {
                         1: {
                             'count': 0,
                             'p': 0,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         },
                         2: {
@@ -849,6 +865,7 @@ class MCTSTestCase(unittest.TestCase):
                             'p': 1,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         }
                     }
@@ -858,6 +875,7 @@ class MCTSTestCase(unittest.TestCase):
                     'p': 0,
                     'mean_value': 0,
                     'value': 0,
+                    'move': 2,
                     'subtree': {},
                 }
             }
@@ -885,12 +903,14 @@ class MCTSTestCase(unittest.TestCase):
             'mean_value': 0,
             'value': 0,
             'parent': None,
+            'move': 1,
             'subtree': {
                 0:{
                     'count': 0,
                     'p': .75,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {}
                 }, 
                 1: {
@@ -898,12 +918,14 @@ class MCTSTestCase(unittest.TestCase):
                     'p': .25,
                     'mean_value': 0,
                     'value': 0,
+                    'move': 2,
                     'subtree': {
                         0: {
                             'count': 0,
                             'p': 1,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         },
                         2: {
@@ -911,6 +933,7 @@ class MCTSTestCase(unittest.TestCase):
                             'p': 0,
                             'mean_value': 0,
                             'value': 0,
+                            'move': 3,
                             'subtree': {},
                         }
                     }
@@ -920,6 +943,7 @@ class MCTSTestCase(unittest.TestCase):
                     'p': 0,
                     'value': 0,
                     'mean_value': 0,
+                    'move': 2,
                     'subtree': {}
                 }, 
             }
@@ -961,7 +985,7 @@ class PlayTestCase(unittest.TestCase):
         board = game_data['moves'][0]['board']
         self.assertTrue(np.array_equal(board, test_board1)) # First board is empty
 
-        self.assertEqual(winner, 0)  # White should win with 5.5 komi after 2 moves
+        self.assertEqual(winner, -1)  # White should win with 5.5 komi after 2 moves
 
         for move, move_data in enumerate(game_data['moves'][::2]): # Black player lost
             value_target = 1 if winner == move_data['player'] else -1
@@ -972,49 +996,79 @@ class PlayTestCase(unittest.TestCase):
         for move, move_data in enumerate(game_data['moves'][1::2]): # White player won
             value_target = 1 if winner == move_data['player'] else -1
 
-            self.assertEqual(move_data['player'], 0)
+            self.assertEqual(move_data['player'], -1)
             self.assertEqual(value_target, 1)
 
     def test_new_tree_called_once_self_play(self):
-        import self_play
-        fn = self_play.new_tree
+        from engine import Tree
+        fn = Tree.new_tree
         self.count = 0
         def monkey_patch_new_tree(*args, **kwargs):
             self.count += 1
             return fn(*args, **kwargs)
-        self_play.new_tree = monkey_patch_new_tree
-
-        model = DummyModel()
-        mcts_simulations = 8 #  We want some mcts exploration
-        play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=5)
-        self.assertEqual(self.count, 1)  # Only one tree was created
-
-    def test_new_tree_called_twice_evaluation(self):
-        import self_play
-        fn = self_play.new_tree
-        self.count = 0
-        def monkey_patch_new_tree(*args, **kwargs):
-            self.count += 1
-            return fn(*args, **kwargs)
-        self_play.new_tree = monkey_patch_new_tree
+        Tree.new_tree = monkey_patch_new_tree
 
         model = DummyModel()
         mcts_simulations = 32 #  We want some mcts exploration
-        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=2)
+        play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=10)
+        self.assertEqual(self.count, 1)  # Only one tree was created
+
+    def test_new_tree_called_twice_evaluation(self):
+        from engine import Tree
+        fn = Tree.new_tree
+        self.count = 0
+        def monkey_patch_new_tree(*args, **kwargs):
+            self.count += 1
+            return fn(*args, **kwargs)
+        Tree.new_tree = monkey_patch_new_tree
+
+        model = DummyModel()
+        mcts_simulations = 160 #  We want some mcts exploration so both tree overlap
+        play_game(model, model, mcts_simulations, stop_exploration=0, self_play=False, num_moves=100)
         # This works because we deactivate exploration and dirichlet noise in order to have
         # deterministic play
-        self.assertEqual(self.count, 2)  # Only one 2 trees were created
+        self.assertEqual(self.count, 2)  # Only 2 trees were created
 
 
 class SGFTestCase(unittest.TestCase):
     def test_save_sgf(self):
         model = DummyModel()
         mcts_simulations = 8 # mcts batch size is 8 and we need at least one batch
-        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=10)
-        save_game_sgf("test_model", 0, game_data)
+        game_data = play_game(model, model, mcts_simulations, conf['STOP_EXPLORATION'], self_play=True, num_moves=100)
 
-        os.remove("games/test_model/game_000.sgf")
+
+        os.makedirs("games/test_model")
+        save_game_sgf("test_model", 1, game_data)
+
+        os.remove("games/test_model/game_001.sgf")
         os.removedirs("games/test_model")
+
+class GTPTestCase(unittest.TestCase):
+    def test_gtp(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        gtp_engine = Engine()
+        result = gtp_engine.parse_command("play B G7")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("genmove W")
+        self.assertEqual(result, "= H3\n\n")
+        result = gtp_engine.parse_command("play B pass")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("play W J7") # I is a skipped letter
+        self.assertEqual(result, "=\n\n")
+
+    def test_gtp_w(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        gtp_engine = Engine()
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= F5\n\n")
+        result = gtp_engine.parse_command("play W G7")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= C5\n\n")
 
 if __name__ == '__main__':
     unittest.main()
