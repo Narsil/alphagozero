@@ -57,13 +57,13 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             engine2.set_temperature(0)
 
         if move_n % 2 == 0:
-            x, y, policy_target, value = engine1.genmove("B")
+            x, y, policy_target, value, _, _ = engine1.genmove("B")
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
             engine2.play("B", x, y, update_tree=not self_play)
         else:
-            x, y, policy_target, value = engine2.genmove("W")
+            x, y, policy_target, value, _, _ = engine2.genmove("W")
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
@@ -114,7 +114,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
 
 
     if conf['SHOW_END_GAME']:
-        if player == 0:
+        if player == -1:
             # black played last
             bvalue, wvalue = value, last_value
         else:
