@@ -10,12 +10,11 @@ from __init__ import __version__
 SIZE = conf['SIZE']
 
 class Engine(object):
-    def __init__(self):
+    def __init__(self, model):
         self.board, self.player = game_init()
-        self.start_engine()
+        self.start_engine(model)
 
-    def start_engine(self):
-        model = load_best_model()
+    def start_engine(self, model):
         self.engine = ModelEngine(model, conf['MCTS_SIMULATIONS'], self.board)
 
     def name(self):
@@ -31,6 +30,14 @@ class Engine(object):
         return ""
 
     def boardsize(self, size):
+        size = int(size)
+        if size != SIZE:
+            raise Exception("The board size in configuration is {0}x{0} but GTP asked to play {1}x{1}".format(SIZE, size))
+        return ""
+
+    def komi(self, komi):
+        # Don't check komi in GTP engine. The algorithm has learned with a specific
+        # komi that we don't have any way to influence after learning.
         return ""
 
     def parse_move(self, move):
@@ -93,7 +100,8 @@ class Engine(object):
         return "= " + result + "\n\n"
 
 def main():
-    engine = Engine()
+    model = load_best_model()
+    engine = Engine(model)
     with open('logs/gtp.log', 'w') as f:
         for line in sys.stdin:
             f.write("<<<" + line)

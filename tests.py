@@ -27,6 +27,7 @@ from symmetry import (
 )
 import itertools
 from sgfsave import save_game_sgf
+from gtp import Engine
 
 class DummyModel(object):
     name = "dummy_model"
@@ -1075,6 +1076,58 @@ class ModelEngineTestCase(unittest.TestCase):
         self.engine.set_temperature(1)
         self.assertEqual(self.engine.temperature, 1)
 
+class GTPTestCase(unittest.TestCase):
+    def setUp(self):
+        model = DummyModel()
+        self.gtp_engine = Engine(model)
+
+    def test_commands(self):
+
+        result = self.gtp_engine.parse_command("boardsize 9")
+        self.assertEqual(result, "=\n\n")
+
+        result = self.gtp_engine.parse_command("komi 6.5")
+        self.assertEqual(result, "=\n\n")
+
+        with self.assertRaises(Exception):
+            result = self.gtp_engine.parse_command("boardsize 19")
+
+    def test_gtp(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        result = self.gtp_engine.parse_command("play B G7")
+        self.assertEqual(result, "=\n\n")
+        result = self.gtp_engine.parse_command("genmove W")
+        self.assertEqual(result, "= B2\n\n")
+        result = self.gtp_engine.parse_command("play B pass")
+        self.assertEqual(result, "=\n\n")
+        result = self.gtp_engine.parse_command("play W J7") # I is a skipped letter
+        self.assertEqual(result, "=\n\n")
+
+    def test_gtp_w(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        result = self.gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= A2\n\n")
+        result = self.gtp_engine.parse_command("play W G7")
+        self.assertEqual(result, "=\n\n")
+        result = self.gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= C2\n\n")
+
+    def test_double_pass(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        result = self.gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= A2\n\n")
+        result = self.gtp_engine.parse_command("play W pass")
+        self.assertEqual(result, "=\n\n")
+        result = self.gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= B2\n\n")
+        result = self.gtp_engine.parse_command("play W pass")
+        self.assertEqual(result, "=\n\n")
 
 if __name__ == '__main__':
     unittest.main()
