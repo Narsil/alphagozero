@@ -4,6 +4,8 @@
 import numpy as np
 import tensorflow as tf
 from random import seed, randrange
+import random
+from gtp import Engine
 
 # The below is necessary in Python 3.2.3 onwards to
 # have reproducible behavior for certain hash-based operations.
@@ -315,7 +317,46 @@ class TestModelLearningTestCase(unittest.TestCase):
         policies, values = model.predict_on_batch(board)
         self.assertLess(values[0][0], -0.9)
 
+class GTPTestCase(unittest.TestCase):
+    def test_gtp(self):
+        np.random.seed(0)
+        random.seed(0)
 
+        gtp_engine = Engine()
+        result = gtp_engine.parse_command("play B G7")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("genmove W")
+        self.assertEqual(result, "= G5\n\n")
+        result = gtp_engine.parse_command("play B pass")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("play W J7") # I is a skipped letter
+        self.assertEqual(result, "=\n\n")
+
+    def test_gtp_w(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        gtp_engine = Engine()
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= G8\n\n")
+        result = gtp_engine.parse_command("play W G7")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= F5\n\n")
+
+    def test_double_pass(self):
+        np.random.seed(0)
+        random.seed(0)
+
+        gtp_engine = Engine()
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= G8\n\n")
+        result = gtp_engine.parse_command("play W pass")
+        self.assertEqual(result, "=\n\n")
+        result = gtp_engine.parse_command("genmove B")
+        self.assertEqual(result, "= B7\n\n")
+        result = gtp_engine.parse_command("play W pass")
+        self.assertEqual(result, "=\n\n")
 
 if __name__ == '__main__':
     unittest.main()

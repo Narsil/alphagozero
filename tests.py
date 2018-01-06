@@ -14,7 +14,7 @@ from play import (
 from self_play import (
         play_game
 )
-from engine import simulate
+from engine import simulate, ModelEngine
 from symmetry import (
         _id,
         left_diagonal, reverse_left_diagonal,
@@ -27,7 +27,6 @@ from symmetry import (
 )
 import itertools
 from sgfsave import save_game_sgf
-from gtp import Engine
 
 class DummyModel(object):
     name = "dummy_model"
@@ -1043,32 +1042,39 @@ class SGFTestCase(unittest.TestCase):
         os.remove("games/test_model/game_001.sgf")
         os.removedirs("games/test_model")
 
-class GTPTestCase(unittest.TestCase):
-    def test_gtp(self):
-        np.random.seed(0)
+class ModelEngineTestCase(unittest.TestCase):
+    def setUp(self):
+        board, player = game_init()
+        model = DummyModel()
+        self.engine = ModelEngine(model, mcts_simulations=8, board=board)
         random.seed(0)
-
-        gtp_engine = Engine()
-        result = gtp_engine.parse_command("play B G7")
-        self.assertEqual(result, "=\n\n")
-        result = gtp_engine.parse_command("genmove W")
-        self.assertEqual(result, "= H3\n\n")
-        result = gtp_engine.parse_command("play B pass")
-        self.assertEqual(result, "=\n\n")
-        result = gtp_engine.parse_command("play W J7") # I is a skipped letter
-        self.assertEqual(result, "=\n\n")
-
-    def test_gtp_w(self):
         np.random.seed(0)
-        random.seed(0)
 
-        gtp_engine = Engine()
-        result = gtp_engine.parse_command("genmove B")
-        self.assertEqual(result, "= F5\n\n")
-        result = gtp_engine.parse_command("play W G7")
-        self.assertEqual(result, "=\n\n")
-        result = gtp_engine.parse_command("genmove B")
-        self.assertEqual(result, "= C5\n\n")
+    def test_model_engine_base_moves(self):
+        x, y, policy, value, board, player = self.engine.genmove('B')
+        self.assertEqual( (x, y), (7, 0))
+        self.assertEqual(player, -1)
+        x, y, policy, value, board, player = self.engine.genmove('W')
+        self.assertEqual( (x, y), (8, 7))
+        self.assertEqual(player,  1)
+
+        with self.assertRaises(AssertionError):
+            self.engine.genmove('W')
+
+    def test_model_engine_resign(self):
+        board, player = game_init()
+        model = DummyModel()
+        #  Always resign
+        self.engine = ModelEngine(model, mcts_simulations=8, board=board, resign=1)
+        x, y, policy, value, board, player = self.engine.genmove('B')
+        self.assertEqual( (x, y), (0, 10))
+
+
+    def test_model_engine_temperature(self):
+        self.assertEqual(self.engine.temperature, 0)
+        self.engine.set_temperature(1)
+        self.assertEqual(self.engine.temperature, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

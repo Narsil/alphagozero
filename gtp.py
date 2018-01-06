@@ -2,12 +2,11 @@
 import sys
 from conf import conf
 from play import game_init
-from engine import ModelEngine
+from engine import ModelEngine, COLOR_TO_PLAYER
 from model import load_best_model
 import string
 from __init__ import __version__
 
-COLOR_TO_PLAYER = {'B': 1, 'W': -1}
 SIZE = conf['SIZE']
 
 class Engine(object):
@@ -36,8 +35,9 @@ class Engine(object):
 
     def parse_move(self, move):
 
-        if move == 'pass':
+        if move.lower() == 'pass':
             x, y = 0, SIZE
+            return x, y
         else:
             letter = move[0]
             number = move[1:]

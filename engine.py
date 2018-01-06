@@ -15,6 +15,7 @@ DIRICHLET_ALPHA = conf['DIRICHLET_ALPHA']
 DIRICHLET_EPSILON = conf['DIRICHLET_EPSILON']
 RESIGNATION_PERCENT = conf['RESIGNATION_PERCENT']
 RESIGNATION_ALLOWED_ERROR = conf['RESIGNATION_ALLOWED_ERROR']
+COLOR_TO_PLAYER = {'B': 1, 'W': -1}
 Cpuct = 1
 
 def new_subtree(policy, board, parent, add_noise=False):
@@ -212,9 +213,11 @@ class ModelEngine(object):
         self.resign = resign
         self.temperature = temperature
         self.board = board
+        self.player = board[0, 0, 0, -1]
         self.add_noise = add_noise
         self.tree = Tree()
         self.move = 1
+
 
     def set_temperature(self, temperature):
         self.temperature = temperature
@@ -230,13 +233,16 @@ class ModelEngine(object):
         return self.board, player
 
     def genmove(self, color):
+        announced_player = COLOR_TO_PLAYER[color]
+        assert announced_player == self.player
+
         policies, values = self.model.predict_on_batch(self.board)
         policy = policies[0]
         value = values[0]
         if self.resign and value <= self.resign:
             x = 0
             y = SIZE + 1
-            return x, y, policy, value, self.board, self.plyaer
+            return x, y, policy, value, self.board, self.player
 
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
         if not self.tree.tree or not self.tree.tree['subtree']:
