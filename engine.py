@@ -228,9 +228,9 @@ class ModelEngine(object):
         if update_tree:
             self.tree.play(index)
 
-        self.board, player = make_play(x, y, self.board)
+        self.board, self.player = make_play(x, y, self.board)
         self.move += 1
-        return self.board, player
+        return self.board, self.player
 
     def genmove(self, color):
         announced_player = COLOR_TO_PLAYER[color]

@@ -1055,7 +1055,7 @@ class ModelEngineTestCase(unittest.TestCase):
         self.assertEqual( (x, y), (7, 0))
         self.assertEqual(player, -1)
         x, y, policy, value, board, player = self.engine.genmove('W')
-        self.assertEqual( (x, y), (8, 7))
+        self.assertEqual( (x, y), (8, 0))
         self.assertEqual(player,  1)
 
         with self.assertRaises(AssertionError):
