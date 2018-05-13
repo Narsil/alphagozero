@@ -5,14 +5,16 @@ from play import game_init
 from engine import ModelEngine, COLOR_TO_PLAYER
 from model import load_best_model
 import string
+import os
 from __init__ import __version__
 
 SIZE = conf['SIZE']
 
 class Engine(object):
-    def __init__(self, model):
+    def __init__(self, model, logfile):
         self.board, self.player = game_init()
         self.start_engine(model)
+        self.logfile = logfile
 
     def start_engine(self, model):
         self.engine = ModelEngine(model, conf['MCTS_SIMULATIONS'], self.board)
@@ -77,9 +79,9 @@ class Engine(object):
         announced_player = COLOR_TO_PLAYER[color]
         assert announced_player == self.player
 
-        x, y, policy_target, value, self.board, self.player = self.engine.genmove(color)
+        x, y, policy_target, value, self.board, self.player, policy = self.engine.genmove(color)
         self.player = self.board[0, 0, 0, -1]  # engine updates self.board already 
-        with open('logs/gtp.log', 'a') as f:
+        with open(self.logfile, 'a') as f:
             f.write("PLAYER" + str(self.player) + '\n')
         move_string = self.print_move(x, y)
         result = move_string
@@ -101,8 +103,9 @@ class Engine(object):
 
 def main():
     model = load_best_model()
-    engine = Engine(model)
-    with open('logs/gtp.log', 'w') as f:
+    gtp_log = os.path.join(conf['ROOT_DIR'], conf['LOG_DIR'], conf['GTP_LOGFILE'])
+    engine = Engine(model, gtp_log)
+    with open(gtp_log, 'w') as f:
         for line in sys.stdin:
             f.write("<<<" + line)
             result = engine.parse_command(line)

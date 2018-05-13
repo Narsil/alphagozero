@@ -242,7 +242,7 @@ class ModelEngine(object):
         if self.resign and value <= self.resign:
             x = 0
             y = SIZE + 1
-            return x, y, policy, value, self.board, self.player
+            return x, y, policy, value, self.board, self.player, policy
 
         # Start of the game mcts_tree is None, but it can be {} if we selected a play that mcts never checked
         if not self.tree.tree or not self.tree.tree['subtree']:
@@ -257,4 +257,4 @@ class ModelEngine(object):
             policy_target[_index] = d['p']
 
         self.board, self.player = self.play(color, x, y)
-        return x, y, policy_target, value, self.board, self.player
+        return x, y, policy_target, value, self.board, self.player, policy

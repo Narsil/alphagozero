@@ -122,5 +122,5 @@ def load_latest_model():
     return model
 
 def load_best_model():
-    model = load_model(os.path.join(conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
+    model = load_model(os.path.join(conf['ROOT_DIR'], conf['MODEL_DIR'], conf['BEST_MODEL']), custom_objects={'loss': loss})
     return model

@@ -19,6 +19,8 @@ DIRICHLET_ALPHA = conf['DIRICHLET_ALPHA']
 DIRICHLET_EPSILON = conf['DIRICHLET_EPSILON']
 RESIGNATION_PERCENT = conf['RESIGNATION_PERCENT']
 RESIGNATION_ALLOWED_ERROR = conf['RESIGNATION_ALLOWED_ERROR']
+MOVE_INDEX = conf['MOVE_INDEX']
+GAME_FILE = conf['GAME_FILE']
 Cpuct = 1
 
 def show_tree(x, y, tree, indent=''):
@@ -57,13 +59,13 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
             engine2.set_temperature(0)
 
         if move_n % 2 == 0:
-            x, y, policy_target, value, _, _ = engine1.genmove("B")
+            x, y, policy_target, value, _, _, policy = engine1.genmove("B")
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
             engine2.play("B", x, y, update_tree=not self_play)
         else:
-            x, y, policy_target, value, _, _ = engine2.genmove("W")
+            x, y, policy_target, value, _, _, policy = engine2.genmove("W")
             if y == SIZE + 1:
                 end_reason = 'RESIGN'
                 break
@@ -72,6 +74,7 @@ def play_game(model1, model2, mcts_simulations, stop_exploration, self_play=Fals
         move_data = {
             'board': np.copy(board),
             'policy': policy_target,
+            'policy_variation': np.linalg.norm(policy_target - policy),
             'value': value,
             'move': (x, y),
             'move_n': move_n,
@@ -182,27 +185,34 @@ def get_game_n(model_name):
     except:
         pass
     dirs = os.listdir(directory)
-    index = [int(name.split("_")[-1].split('.')[0]) for name in dirs] # game_001, and game_001.sgf
+    index = [int(name.split("_")[-1].split('.')[0]) for name in dirs if name.endswith('h5')] # game_001, and game_001.sgf
     return max(index, default=0) + 1
 
-def save_file(model_name, game_n, move_data, winner):
-    board = move_data['board']
-    policy_target = move_data['policy']
-    player = move_data['player']
-    value_target = 1 if winner == player else -1
-    move = move_data['move_n']
-    directory = os.path.join(conf["GAMES_DIR"], model_name, "game_%03d" % game_n, "move_%03d" % move)
-    os.makedirs(directory)
-    with h5py.File(os.path.join(directory, 'sample.h5'),'w') as f:
-        f.create_dataset('board', data=board, dtype=np.float32)
-        f.create_dataset('policy_target', data=policy_target, dtype=np.float32)
-        f.create_dataset('value_target', data=np.array(value_target), dtype=np.float32)
+def save_file(model_name, game_n, game_data, winner):
+    directory = os.path.join(conf["GAMES_DIR"], model_name)
+    os.makedirs(directory, exist_ok=True)
+    with h5py.File(os.path.join(directory, GAME_FILE % game_n), 'w') as f:
+        f.create_dataset('n_moves', data=(len(game_data['moves']), ), dtype=np.int32)
+        for move_data in game_data['moves']:
+            board = move_data['board']
+            policy_target = move_data['policy']
+            player = move_data['player']
+            value_target = 1 if winner == player else -1
+            move = move_data['move_n']
+
+            grp = f.create_group('move_%s' % move)
+            grp.create_dataset('board', data=board, dtype=np.float32)
+            grp.create_dataset('policy_target', data=policy_target, dtype=np.float32)
+            grp.create_dataset('value_target', data=np.array(value_target), dtype=np.float32)
+    with open(os.path.join(directory, MOVE_INDEX), 'a') as f:
+        for move_data in game_data['moves']:
+            line = [game_n, move_data['move_n'], move_data['policy_variation']]
+            f.write(",".join(str(item) for item in line) + "\n")
 
 def save_game_data(model_name, game_data):
     winner = game_data['winner']
     game_n = get_game_n(model_name)
-    for move_data in game_data['moves']:
-        save_file(model_name, game_n, move_data, winner)
+    save_file(model_name, game_n, game_data, winner)
     if conf['SGF_ENABLED']:
         save_game_sgf(model_name, game_n, game_data)
 
