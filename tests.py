@@ -1052,10 +1052,10 @@ class ModelEngineTestCase(unittest.TestCase):
         np.random.seed(0)
 
     def test_model_engine_base_moves(self):
-        x, y, policy, value, board, player = self.engine.genmove('B')
+        x, y, policy, value, board, player, policy = self.engine.genmove('B')
         self.assertEqual( (x, y), (7, 0))
         self.assertEqual(player, -1)
-        x, y, policy, value, board, player = self.engine.genmove('W')
+        x, y, policy, value, board, player, policy = self.engine.genmove('W')
         self.assertEqual( (x, y), (8, 0))
         self.assertEqual(player,  1)
 
@@ -1067,7 +1067,7 @@ class ModelEngineTestCase(unittest.TestCase):
         model = DummyModel()
         #  Always resign
         self.engine = ModelEngine(model, mcts_simulations=8, board=board, resign=1)
-        x, y, policy, value, board, player = self.engine.genmove('B')
+        x, y, policy, value, board, player, policy = self.engine.genmove('B')
         self.assertEqual( (x, y), (0, 10))
 
 
@@ -1079,7 +1079,10 @@ class ModelEngineTestCase(unittest.TestCase):
 class GTPTestCase(unittest.TestCase):
     def setUp(self):
         model = DummyModel()
-        self.gtp_engine = Engine(model)
+        self.gtp_engine = Engine(model, 'test.log')
+
+    def tearDown(self):
+        os.remove('test.log')
 
     def test_commands(self):
 

@@ -41,7 +41,9 @@ def _show_board(board, policy):
     if policy is not None:
         index = policy.argmax()
         x, y = index2coord(index)
-    string = ""
+
+    color = "B" if board[0][0][0][-1] == 1 else "W"
+    string = "To play: %s\n" % color
     for j, row in enumerate(real_board):
         for i, c in enumerate(row):
             if c == 1:
