@@ -17,7 +17,7 @@ prompt-toolkit==1.0.15
 protobuf==3.4.0
 ptyprocess==0.5.2
 Pygments==2.2.0
-PyYAML==3.13
+PyYAML==5.1
 scipy==1.0.0
 simplegeneric==0.8.1
 six==1.11.0
