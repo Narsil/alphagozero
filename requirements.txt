@@ -2,7 +2,7 @@ bleach==3.3.0
 decorator==4.1.2
 enum34==1.1.6
 h5py==2.7.1
-html5lib==0.9999999
+html5lib==0.99999999
 ipdb==0.10.3
 ipython==7.16.3
 ipython-genutils==0.2.0
